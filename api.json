@@ -1,0 +1,57 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "auth",
+    "description": "",
+    "contact": {
+      "name": "",
+      "email": ""
+    },
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "tags": [
+          "crate"
+        ],
+        "operationId": "root",
+        "responses": {
+          "200": {
+            "description": "service information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceData"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ServiceData": {
+        "type": "object",
+        "required": [
+          "service_name",
+          "service_version"
+        ],
+        "properties": {
+          "service_name": {
+            "type": "string"
+          },
+          "service_version": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
