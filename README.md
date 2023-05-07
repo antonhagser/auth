@@ -16,3 +16,7 @@ A secure and efficient authentication and authorization service, providing user 
 -   Integration with popular log management and monitoring solutions
 -   Enhanced user profile management, including profile picture upload and retrieval
 -   Implementing WebAuthn for passwordless authentication
+
+## Commit Guidelines
+
+Please follow the [commit guidelines](./.github/commit_guidelines.md) when making changes to this project. These guidelines outline the steps to take before committing your code changes, as well as the terms and conditions for contributing to this project. Following these guidelines helps ensure consistency and maintainability of the codebase.

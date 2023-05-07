@@ -47,7 +47,8 @@ pub type AppState = Arc<State>;
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
+    // tracing_subscriber::fmt::init();
+    console_subscriber::init();
     info!("starting service");
 
     // Create a shared connection pool
