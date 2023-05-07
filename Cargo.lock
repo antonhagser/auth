@@ -97,7 +97,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "authcore"
+name = "authcore-service"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1077,6 +1077,10 @@ checksum = "abb12e687cfb44aa40f41fc3978ef76448f9b6038cad6aef4259d3c095a2382e"
 dependencies = [
  "cfg-if",
 ]
+
+[[package]]
+name = "logging-service"
+version = "0.1.0"
 
 [[package]]
 name = "matchers"

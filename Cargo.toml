@@ -1,2 +1,2 @@
 [workspace]
-members = ["authcore", "crypto"]
+members = ["authcore-service", "crypto", "logging-service"]
