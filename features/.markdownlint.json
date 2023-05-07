@@ -1,0 +1,5 @@
+{
+    "default": true,
+    "MD013": { "line_length": 420 },
+    "MD030": { "ul_multi": 3, "ul_single": 3 }
+}
