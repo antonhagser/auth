@@ -47,7 +47,7 @@
 //! assert!(is_valid);
 //! ````
 
+pub mod jwt;
 pub mod password;
 pub mod snowflake;
 pub mod totp;
-pub mod jwt;
