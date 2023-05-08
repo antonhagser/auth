@@ -1,3 +1,8 @@
+//! This module provides utilities for working with Paseto tokens.
+//!
+//! It defines custom error types, claim structures, and utility functions for
+//! generating, encrypting, and validating tokens.
+
 use chrono::{DateTime, Utc};
 use rusty_paseto::prelude::{
     AudienceClaim, CustomClaim, ExpirationClaim, IssuerClaim, Key, Local, NotBeforeClaim,
@@ -7,33 +12,93 @@ use serde::de::DeserializeOwned;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{self, Value};
 
+/// Represents possible errors that can occur while working with Paseto tokens.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Error that occurs while building a Paseto token.
     #[error("Paseto builder error: {0}")]
     PasetoBuilderError(#[from] rusty_paseto::generic::GenericBuilderError),
 
+    /// Error that occurs while parsing a Paseto token.
     #[error("Paseto parser error: {0}")]
     PasetoParserError(#[from] rusty_paseto::generic::GenericParserError),
 
+    /// Error that occurs while serializing or deserializing JSON data.
     #[error("Serde error: {0}")]
     SerdeError(#[from] serde_json::Error),
 
+    /// Indicates an invalid Paseto token.
     #[error("Invalid token")]
     InvalidToken,
 }
 
+/// Represents a set of claims with ownership.
+///
+/// Owned claims are useful when working with deserialized Paseto tokens,
+/// where string lifetimes are not known in advance.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OwnedClaims<C> {
-    pub issuer: String,
-    pub issued_at: Option<DateTime<Utc>>,
-    pub expiration: DateTime<Utc>,
-    pub not_before: DateTime<Utc>,
-    pub subject: Option<String>,
-    pub audience: Option<String>,
-    pub token_id: String,
-    pub other: Option<C>,
+    /// The issuer of the token.
+    issuer: String,
+    /// The time at which the token was issued.
+    issued_at: Option<DateTime<Utc>>,
+    /// The expiration time of the token.
+    expiration: DateTime<Utc>,
+    /// The earliest time at which the token is valid.
+    not_before: DateTime<Utc>,
+    /// The subject of the token.
+    subject: Option<String>,
+    /// The intended audience of the token.
+    audience: Option<String>,
+    /// The unique identifier of the token.
+    token_id: String,
+    /// Any additional claims.
+    other: Option<C>,
 }
 
+impl<C> OwnedClaims<C> {
+    /// Returns the issuer of the token.
+    pub fn issuer(&self) -> &str {
+        self.issuer.as_ref()
+    }
+
+    /// Returns the time at which the token was issued.
+    pub fn issued_at(&self) -> Option<DateTime<Utc>> {
+        self.issued_at
+    }
+
+    /// Returns the expiration time of the token.
+    pub fn expiration(&self) -> DateTime<Utc> {
+        self.expiration
+    }
+
+    /// Returns the earliest time at which the token is valid.
+    pub fn not_before(&self) -> DateTime<Utc> {
+        self.not_before
+    }
+
+    /// Returns the subject of the token.
+    pub fn subject(&self) -> Option<&String> {
+        self.subject.as_ref()
+    }
+
+    /// Returns the intended audience of the token.
+    pub fn audience(&self) -> Option<&String> {
+        self.audience.as_ref()
+    }
+
+    /// Returns the unique identifier of the token.
+    pub fn token_id(&self) -> &str {
+        self.token_id.as_ref()
+    }
+
+    /// Returns any additional claims.
+    pub fn other(&self) -> Option<&C> {
+        self.other.as_ref()
+    }
+}
+
+/// Allows conversion from `DefaultClaims` to `OwnedClaims`.
 impl<'a, C> From<DefaultClaims<'a>> for OwnedClaims<C> {
     fn from(value: DefaultClaims<'a>) -> Self {
         OwnedClaims {
@@ -49,6 +114,10 @@ impl<'a, C> From<DefaultClaims<'a>> for OwnedClaims<C> {
     }
 }
 
+/// Represents a set of default claims.
+///
+/// Default claims are useful when working with Paseto tokens that have
+/// a known lifetime.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DefaultClaims<'a> {
     #[serde(rename = "iss")]
@@ -96,51 +165,40 @@ impl<'a> DefaultClaims<'a> {
         }
     }
 
+    /// Sets the subject of the token.
     pub fn set_subject(&mut self, subject: &'a str) {
         self.subject = Some(subject);
     }
 
+    /// Sets the audience of the token.
     pub fn set_audience(&mut self, audience: &'a str) {
         self.audience = Some(audience);
     }
-
-    pub fn issuer(&self) -> &str {
-        self.issuer
-    }
-
-    pub fn issued_at(&self) -> Option<DateTime<Utc>> {
-        self.issued_at
-    }
-
-    pub fn not_before(&self) -> DateTime<Utc> {
-        self.not_before
-    }
-
-    pub fn expiration(&self) -> DateTime<Utc> {
-        self.expiration
-    }
-
-    pub fn subject(&self) -> Option<&str> {
-        self.subject
-    }
-
-    pub fn audience(&self) -> Option<&str> {
-        self.audience
-    }
-
-    pub fn token_id(&self) -> &str {
-        self.token_id
-    }
-
-    pub fn other(&self) -> Option<&Value> {
-        self.other.as_ref()
-    }
 }
 
+/// Generates a Paseto symmetric key from the provided key bytes.
+///
+/// # Arguments
+///
+/// * `key` - A byte slice representing the key.
+///
+/// # Returns
+///
+/// * A `PasetoSymmetricKey` instance.
 pub fn generate_key(key: &[u8]) -> PasetoSymmetricKey<V4, Local> {
     PasetoSymmetricKey::<V4, Local>::from(Key::from(key))
 }
 
+/// Encrypts a Paseto token with the provided claims and key.
+///
+/// # Arguments
+///
+/// * `default_claims` - A `DefaultClaims` instance containing the claims to be encrypted.
+/// * `key` - A reference to a `PasetoSymmetricKey` instance.
+///
+/// # Returns
+///
+/// * A `Result` containing the encrypted token string, or an `Error`.
 pub fn encrypt_token(
     default_claims: DefaultClaims,
     key: &PasetoSymmetricKey<V4, Local>,
@@ -174,6 +232,16 @@ pub fn encrypt_token(
     Ok(token.build(key)?)
 }
 
+/// Validates a Paseto token and extracts the claims.
+///
+/// # Arguments
+///
+/// * token - A string reference containing the Paseto token to validate.
+/// * key - A reference to a PasetoSymmetricKey instance.
+///
+/// # Returns
+///
+/// * A Result containing an OwnedClaims<()> instance with the extracted claims, or an Error.
 pub fn validate_token(
     token: &str,
     key: &PasetoSymmetricKey<V4, Local>,
@@ -193,6 +261,20 @@ pub fn validate_token(
     Ok(claims.into())
 }
 
+/// Validates a Paseto token and extracts the claims with a custom data type.
+///
+/// # Arguments
+///
+/// * token - A string reference containing the Paseto token to validate.
+/// * key - A reference to a PasetoSymmetricKey instance.
+///
+/// # Type Parameters
+///
+/// * C - The custom data type for additional claims. Must implement DeserializeOwned.
+///
+/// # Returns
+///
+/// * A Result containing an OwnedClaims<C> instance with the extracted claims, or an Error.
 pub fn validate_token_with<C>(
     token: &str,
     key: &PasetoSymmetricKey<V4, Local>,
