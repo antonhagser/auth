@@ -47,7 +47,7 @@ pub struct State {
 pub type AppState = Arc<State>;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // tracing_subscriber::fmt::init();
     console_subscriber::init();
     info!("starting service");
@@ -67,11 +67,8 @@ async fn main() {
         #[openapi(paths(root), components(schemas(ServiceData)))]
         struct ApiDoc;
 
-        let doc = ApiDoc::openapi().to_pretty_json().unwrap();
-        std::fs::File::create("api.json")
-            .unwrap()
-            .write_all(doc.as_bytes())
-            .unwrap();
+        let doc = ApiDoc::openapi().to_pretty_json()?;
+        std::fs::File::create("api.json")?.write_all(doc.as_bytes())?;
 
         // In debug mode we bind to localhost to avoid exposing the service
         Ipv4Addr::LOCALHOST
@@ -96,8 +93,9 @@ async fn main() {
     tracing::debug!("http listening on {}", http_addr);
     axum::Server::bind(&http_addr)
         .serve(app.into_make_service())
-        .await
-        .unwrap();
+        .await?;
 
     info!("service stopped");
+
+    Ok(())
 }

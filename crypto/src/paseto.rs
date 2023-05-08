@@ -20,6 +20,10 @@ pub enum Error {
     PasetoBuilderError(#[from] rusty_paseto::generic::GenericBuilderError),
 
     /// Error that occurs while parsing a Paseto token.
+    #[error("Paseto claim error: {0}")]
+    PasetoClaimError(#[from] rusty_paseto::prelude::PasetoClaimError),
+
+    /// Error that occurs while parsing a Paseto token.
     #[error("Paseto parser error: {0}")]
     PasetoParserError(#[from] rusty_paseto::generic::GenericParserError),
 
@@ -205,8 +209,12 @@ pub fn encrypt_token(
 ) -> Result<String, Error> {
     let mut token: PasetoBuilder<V4, Local> = PasetoBuilder::<V4, Local>::default();
     let token = token
-        .set_claim(ExpirationClaim::try_from(default_claims.expiration.to_rfc3339()).unwrap())
-        .set_claim(NotBeforeClaim::try_from(default_claims.not_before.to_rfc3339()).unwrap())
+        .set_claim(ExpirationClaim::try_from(
+            default_claims.expiration.to_rfc3339(),
+        )?)
+        .set_claim(NotBeforeClaim::try_from(
+            default_claims.not_before.to_rfc3339(),
+        )?)
         .set_claim(IssuerClaim::from(default_claims.issuer))
         .set_claim(TokenIdentifierClaim::from(default_claims.token_id));
 
@@ -225,7 +233,7 @@ pub fn encrypt_token(
 
         let object: serde_json::Map<String, Value> = serde_json::from_value(other)?;
         for (key, value) in object {
-            token.set_claim(CustomClaim::try_from((key.to_owned(), value)).unwrap());
+            token.set_claim(CustomClaim::try_from((key.to_owned(), value))?);
         }
     }
 
@@ -256,7 +264,7 @@ pub fn validate_token(
 
     // Parse the claims
     let res = res.to_string();
-    let claims: DefaultClaims = serde_json::from_str(&res).unwrap();
+    let claims: DefaultClaims = serde_json::from_str(&res)?;
 
     Ok(claims.into())
 }
@@ -292,11 +300,11 @@ where
 
     // Parse the claims
     let res = res.to_string();
-    let mut claims: DefaultClaims = serde_json::from_str(&res).unwrap();
+    let mut claims: DefaultClaims = serde_json::from_str(&res)?;
 
     // Parse the other claims
     if let Some(other_claims) = claims.other.take() {
-        let other_claims: C = serde_json::from_value(other_claims).unwrap();
+        let other_claims: C = serde_json::from_value(other_claims)?;
         let mut claims: OwnedClaims<C> = claims.into();
         claims.other = Some(other_claims);
 
