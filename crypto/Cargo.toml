@@ -5,17 +5,20 @@ edition = "2021"
 
 [dependencies]
 argon2 = "0.5.0"
-chrono = "0.4.24"
+chrono = { version = "0.4.24", features = ["serde"] }
 data-encoding = "2.3.3"
 hmac = "0.12.1"
 jsonwebtoken = "8.3.0"
+once_cell = "1.17.1"
 rand = "0.8.5"
 serde = "1.0.160"
-serde_derive = "1.0.160"
+serde_derive = "1.0.162"
 serde_json = "1.0.96"
 sha1 = "0.10.5"
 thiserror = "1.0.38"
 tokio = "1.28.0"
+failure = "0.1.8"
+rusty_paseto = "0.5.0"
 
 [dev-dependencies]
 rand = "0.8.5"

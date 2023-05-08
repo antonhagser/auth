@@ -40,6 +40,7 @@ async fn root() -> Json<ServiceData> {
 
 #[derive(Debug)]
 pub struct State {
+    #[allow(dead_code)]
     authenticator: Authenticator,
 }
 

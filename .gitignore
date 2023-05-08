@@ -1,3 +1,5 @@
 **/target
 **/*.code-workspace
 api.json
+testing-crate
+.gitignore

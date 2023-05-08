@@ -4,7 +4,6 @@ use axum::{
     http::StatusCode,
     Json, TypedHeader,
 };
-use crypto::jwt::JWT;
 use serde::Serialize;
 
 use crate::AppState;
@@ -16,26 +15,16 @@ pub struct VerifyResponse {
 }
 
 pub async fn verify(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     TypedHeader(authorization): TypedHeader<Authorization<Bearer>>,
 ) -> (StatusCode, Json<VerifyResponse>) {
-    let token = authorization.token();
+    let _token = authorization.token();
 
-    // todo: handle error
-    match JWT::verify_token(token, state.authenticator.pub_key_pem()) {
-        Ok(_) => (
-            StatusCode::OK,
-            Json(VerifyResponse {
-                is_valid: true,
-                expired: false,
-            }),
-        ),
-        Err(e) => (
-            StatusCode::UNAUTHORIZED,
-            Json(VerifyResponse {
-                is_valid: false,
-                expired: e.kind() == &jsonwebtoken::errors::ErrorKind::ExpiredSignature,
-            }),
-        ),
-    }
+    (
+        StatusCode::UNAUTHORIZED,
+        Json(VerifyResponse {
+            is_valid: false,
+            expired: true,
+        }),
+    )
 }
