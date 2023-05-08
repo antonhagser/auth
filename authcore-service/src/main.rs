@@ -1,20 +1,22 @@
 use std::{
-    io::Write,
     net::{Ipv4Addr, SocketAddr},
     sync::Arc,
 };
 
-use authenticator::Authenticator;
-use axum::{routing::get, Json, Router};
-
+use grpc::GrpcServerError;
+use http::HTTPServerError;
 use once_cell::sync::Lazy;
 use serde::Serialize;
+use state::AppState;
+use tokio::task::JoinHandle;
 use tracing::info;
-use utoipa::{OpenApi, ToSchema};
+use utoipa::ToSchema;
 
-pub mod authenticator;
+use crate::state::State;
+
 pub mod grpc;
-pub mod routes;
+pub mod http;
+pub mod state;
 
 #[derive(Clone, Copy, Serialize, ToSchema)]
 struct ServiceData {
@@ -27,75 +29,54 @@ static SERVICE_DATA: Lazy<ServiceData> = Lazy::new(|| ServiceData {
     service_version: env!("CARGO_PKG_VERSION"),
 });
 
-#[utoipa::path(
-    get,
-    path = "/",
-    responses(
-        (status = 200, description = "service information", body = ServiceData)
-    )
-)]
-async fn root() -> Json<ServiceData> {
-    Json(*SERVICE_DATA)
-}
-
-#[derive(Debug)]
-pub struct State {
-    #[allow(dead_code)]
-    authenticator: Authenticator,
-}
-
-pub type AppState = Arc<State>;
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // tracing_subscriber::fmt::init();
     console_subscriber::init();
     info!("starting service");
 
-    // Create a shared connection pool
-    let shared_state = State {
-        authenticator: Authenticator::new(),
-    };
+    // Create a shared app state
+    let app_state = State::new();
+    let app_state = Arc::new(app_state);
 
-    let shared_state = Arc::new(shared_state);
-
+    // If we are running in debug mode, bind to localhost
     let ip = if cfg!(debug_assertions) {
         tracing::debug!("running in debug mode");
-
-        // Build the OpenAPI documentation
-        #[derive(OpenApi)]
-        #[openapi(paths(root), components(schemas(ServiceData)))]
-        struct ApiDoc;
-
-        let doc = ApiDoc::openapi().to_pretty_json()?;
-        std::fs::File::create("api.json")?.write_all(doc.as_bytes())?;
-
-        // In debug mode we bind to localhost to avoid exposing the service
         Ipv4Addr::LOCALHOST
     } else {
         tracing::debug!("running in release mode");
         Ipv4Addr::UNSPECIFIED
     };
 
+    // Bind to the default ports
     let http_addr = SocketAddr::from((ip, 8080));
     let grpc_addr = SocketAddr::from((ip, 58080));
 
-    let state = shared_state.clone();
-    tokio::spawn(async move {
-        grpc::run(grpc_addr, state).await;
-    });
+    // Start the gRPC server
+    let grpc_handle = start_grpc(app_state.clone(), grpc_addr).await?;
 
-    let app = Router::new()
-        .route("/", get(root))
-        .route("/verify", get(routes::verify::verify))
-        .with_state(shared_state.clone());
+    // Start the HTTP server
+    let http_handle = start_http(app_state, http_addr).await?;
 
-    tracing::debug!("http listening on {}", http_addr);
-    axum::Server::bind(&http_addr)
-        .serve(app.into_make_service())
-        .await?;
+    // Join both handles
+    futures::future::select(grpc_handle, http_handle).await;
 
     info!("service stopped");
-
     Ok(())
+}
+
+async fn start_grpc(
+    app_state: AppState,
+    grpc_addr: SocketAddr,
+) -> Result<JoinHandle<Result<(), GrpcServerError>>, Box<dyn std::error::Error>> {
+    let handle = tokio::spawn(async move { grpc::run(grpc_addr, app_state).await });
+    Ok(handle)
+}
+
+async fn start_http(
+    app_state: AppState,
+    http_addr: SocketAddr,
+) -> Result<JoinHandle<Result<(), HTTPServerError>>, Box<dyn std::error::Error>> {
+    let handle = tokio::spawn(async move { http::run(http_addr, app_state).await });
+    Ok(handle)
 }
