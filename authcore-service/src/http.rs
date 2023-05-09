@@ -8,6 +8,8 @@ use utoipa::OpenApi;
 
 use crate::{state::AppState, ServiceData, SERVICE_DATA};
 
+pub mod modules;
+
 #[utoipa::path(
     get,
     path = "/",
@@ -76,8 +78,9 @@ pub async fn run(addr: SocketAddr, state: AppState) -> Result<(), HTTPServerErro
     }
 
     let app = Router::new()
-        .route("/", get(root))
-        .with_state(state.clone());
+        .route("/auth", get(root))
+        .with_state(state.clone())
+        .nest("/auth", modules::router(state.clone()));
 
     tracing::debug!("http listening on {}", addr);
 

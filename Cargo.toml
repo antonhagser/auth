@@ -1,2 +1,6 @@
 [workspace]
-members = ["authcore-service", "crypto", "logging-service"]
+members = ["authcore-service", "logging-service", "prisma-cli"]
+resolver = "2"
+
+[workspace.dependencies]
+crypto = { path = "./crypto" }

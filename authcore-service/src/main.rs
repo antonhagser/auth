@@ -14,8 +14,10 @@ use utoipa::ToSchema;
 
 use crate::state::State;
 
+pub mod core;
 pub mod grpc;
 pub mod http;
+pub mod models;
 pub mod state;
 
 #[derive(Clone, Copy, Serialize, ToSchema)]

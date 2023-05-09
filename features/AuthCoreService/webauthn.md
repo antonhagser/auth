@@ -16,10 +16,10 @@ All routes will start with `/api/v0/`.
 
 ## WebAuthn Service
 
--   POST `/api/v0/auth/webauthn/register`: Start the registration process for a new WebAuthn credential.
--   POST `/api/v0/auth/webauthn/register/complete`: Complete the registration process by validating and storing the new WebAuthn credential.
--   POST `/api/v0/auth/webauthn/login`: Start the authentication process using a registered WebAuthn credential.
--   POST `/api/v0/auth/webauthn/login/complete`: Complete the authentication process by validating the provided WebAuthn assertion.
+-   POST `/auth/webauthn/register`: Start the registration process for a new WebAuthn credential.
+-   POST `/auth/webauthn/register/complete`: Complete the registration process by validating and storing the new WebAuthn credential.
+-   POST `/auth/webauthn/login`: Start the authentication process using a registered WebAuthn credential.
+-   POST `/auth/webauthn/login/complete`: Complete the authentication process by validating the provided WebAuthn assertion.
 
 ## Usage Example
 

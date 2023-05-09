@@ -25,12 +25,15 @@ pub enum GrpcServerError {}
 pub async fn run(addr: SocketAddr, _state: AppState) -> Result<(), GrpcServerError> {
     tracing::debug!("grpc listening on {}", addr);
     // tonic::transport::Server::builder()
+    //     .add_service(HelloServer::new(HelloService))
     //     .serve(addr)
     //     .await
     //     .unwrap();
 
     #[allow(clippy::empty_loop)]
-    loop {}
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(50)).await;
+    }
 
     #[allow(unreachable_code)]
     Ok(())
