@@ -1,5 +1,5 @@
 [workspace]
-members = ["authcore-service", "logging-service", "prisma-cli"]
+members = ["authcore-service", "logging-service", "prisma-cli", "platform-service"]
 resolver = "2"
 
 [workspace.dependencies]

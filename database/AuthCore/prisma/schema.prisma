@@ -133,7 +133,9 @@ model Application {
 
     applicationMetadata ApplicationMetadata[]
 
-    accounts Account[]
+    accounts       Account[]
+    Organization   Organization? @relation(fields: [organizationId], references: [id])
+    organizationId BigInt?
 
     @@index([name])
 }
@@ -148,4 +150,34 @@ model ApplicationMetadata {
     value String
 
     @@index([key])
+}
+
+model Organization {
+    id BigInt @id @unique
+
+    name String @unique
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    applications       Application[]
+    OrganizationMember OrganizationMember?
+
+    @@index([name])
+}
+
+enum OrganizationMemberRole {
+    ADMIN
+    MEMBER
+}
+
+model OrganizationMember {
+    id BigInt @id @unique
+
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    organizationId BigInt       @unique
+
+    role OrganizationMemberRole
+
+    @@index([organizationId])
 }
