@@ -8,8 +8,144 @@ generator client {
     output   = "../../../authcore-service/src/models/prisma.rs"
 }
 
-model User {
-    id    Int     @id @default(autoincrement())
-    email String  @unique
-    name  String?
+model Account {
+    id BigInt @id @unique
+
+    firstName String?
+    lastName  String?
+
+    emailAddress EmailAddress?
+
+    externalAccounts ExternalAccount[]
+    basicAuth        BasicAuth?
+    passwordEnabled  Boolean           @default(false)
+
+    lastLoginAt DateTime?
+    lastLoginIP String?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    sessions        Session[]
+    accountTokens   AccountToken[]
+    accountMetadata AccountMetadata[]
+
+    application   Application @relation(fields: [applicationID], references: [id], onDelete: Cascade)
+    applicationID BigInt      @unique
+
+    @@index([firstName, lastName])
+}
+
+model EmailAddress {
+    id BigInt @id @unique
+
+    account   Account @relation(fields: [accountID], references: [id], onDelete: Cascade)
+    accountID BigInt  @unique
+
+    email String @unique
+
+    verified   Boolean   @default(false)
+    verifiedAt DateTime?
+    verifiedIP String?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([email])
+}
+
+model ExternalAccount {
+    id BigInt @id @unique
+
+    account   Account @relation(fields: [accountID], references: [id], onDelete: Cascade)
+    accountID BigInt
+
+    provider          String
+    providerAccountID String
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
+
+model BasicAuth {
+    id BigInt @id @unique
+
+    account   Account @relation(fields: [accountID], references: [id], onDelete: Cascade)
+    accountID BigInt  @unique
+
+    accountname String @unique
+    password    String
+}
+
+model Session {
+    id BigInt @id @unique
+
+    account   Account @relation(fields: [accountID], references: [id], onDelete: Cascade)
+    accountID BigInt
+
+    token String @unique
+
+    blacklisted   Boolean   @default(false)
+    blacklistedAt DateTime?
+
+    createdAt DateTime @default(now())
+}
+
+enum AccountTokenType {
+    EMAIL_VERIFICATION
+    PASSWORD_RESET
+}
+
+model AccountToken {
+    id BigInt @id @unique
+
+    account   Account @relation(fields: [accountID], references: [id], onDelete: Cascade)
+    accountID BigInt
+
+    tokenType AccountTokenType
+
+    token String @unique
+
+    used Boolean @default(false)
+
+    createdAt DateTime @default(now())
+}
+
+model AccountMetadata {
+    id BigInt @id @unique
+
+    account   Account @relation(fields: [accountID], references: [id], onDelete: Cascade)
+    accountID BigInt  @unique
+
+    key   String
+    value String
+
+    @@index([key])
+}
+
+model Application {
+    id BigInt @id @unique
+
+    name String @unique
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    applicationMetadata ApplicationMetadata[]
+
+    accounts Account[]
+
+    @@index([name])
+}
+
+model ApplicationMetadata {
+    id BigInt @id @unique
+
+    application   Application @relation(fields: [applicationID], references: [id], onDelete: Cascade)
+    applicationID BigInt      @unique
+
+    key   String
+    value String
+
+    @@index([key])
 }
