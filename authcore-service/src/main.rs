@@ -46,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()
         .await?;
 
-    let id_generator = crypto::snowflake::SnowflakeGenerator::new(0);
+    let id_generator = crypto::snowflake::SnowflakeGenerator::new(0, 0);
 
     let app_state = State::new(prisma, id_generator);
     let app_state = Arc::new(app_state);

@@ -130,7 +130,7 @@ model UserMetadata {
 model Application {
     id BigInt @id @unique
 
-    name String @unique
+    name String
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt

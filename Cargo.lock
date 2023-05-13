@@ -193,7 +193,6 @@ dependencies = [
  "rand 0.8.5",
  "rsa",
  "serde",
- "serde_derive",
  "serde_json",
  "thiserror",
  "tokio",

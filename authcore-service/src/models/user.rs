@@ -2,13 +2,10 @@ use chrono::{DateTime, Utc};
 use crypto::snowflake::{Snowflake, SnowflakeGenerator};
 use prisma_client_rust::QueryError;
 
-use super::prisma::{self, PrismaClient};
-
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("database error")]
-    DatabaseError(#[from] prisma_client_rust::QueryError),
-}
+use super::{
+    error::ModelError,
+    prisma::{self, PrismaClient},
+};
 
 #[derive(Debug, Clone)]
 pub struct User {
@@ -44,12 +41,18 @@ impl User {
         application_id: Snowflake,
     ) -> UserBuilder<'a> {
         let user = User {
-            id: id_generator.next_snowflake(),
+            id: id_generator
+                .next_snowflake()
+                .expect("failed to generate snowflake"),
             first_name: None,
             last_name: None,
             email_address: EmailAddress {
-                id: id_generator.next_snowflake(),
-                user_id: id_generator.next_snowflake(),
+                id: id_generator
+                    .next_snowflake()
+                    .expect("failed to generate snowflake"),
+                user_id: id_generator
+                    .next_snowflake()
+                    .expect("failed to generate snowflake"),
                 email_address: String::new(),
                 verified: false,
                 verified_at: None,
@@ -147,14 +150,17 @@ impl<'a> UserBuilder<'a> {
         self
     }
 
-    pub fn email_address(mut self, email_address: String) -> Self {
-        self.user.email_address.email_address = email_address;
+    pub fn email_address<C: Into<String>>(mut self, email_address: C) -> Self {
+        self.user.email_address.email_address = email_address.into();
         self
     }
 
     pub fn user_metadata(mut self, key: String, value: String) -> Self {
         self.user.user_metadata.push(UserMetadata {
-            id: self.id_generator.next_snowflake(),
+            id: self
+                .id_generator
+                .next_snowflake()
+                .expect("failed to generate snowflake"),
             user_id: self.user.id,
             key,
             value,
@@ -166,7 +172,10 @@ impl<'a> UserBuilder<'a> {
 
     pub fn basic_auth(mut self, username: String, password_hash: String) -> Self {
         self.user.basic_auth = Some(BasicAuth {
-            id: self.id_generator.next_snowflake(),
+            id: self
+                .id_generator
+                .next_snowflake()
+                .expect("failed to generate snowflake"),
             user_id: self.user.id,
             username,
             password_hash,
@@ -178,7 +187,7 @@ impl<'a> UserBuilder<'a> {
         self
     }
 
-    pub async fn build(self) -> Result<User, Error> {
+    pub async fn build(self) -> Result<User, ModelError> {
         let user = self.user;
         let user_id = user.id;
         let application_id = user.application_id;
@@ -203,8 +212,8 @@ impl<'a> UserBuilder<'a> {
                 let user_data = client
                     .user()
                     .create(
-                        user_id.get_id() as i64,
-                        prisma::application::id::equals(application_id.get_id() as i64),
+                        user_id.to_id_signed(),
+                        prisma::application::id::equals(application_id.to_id_signed()),
                         vec![],
                     )
                     .exec()
@@ -213,8 +222,8 @@ impl<'a> UserBuilder<'a> {
                 let email_address_data = client
                     .email_address()
                     .create(
-                        user.email_address.id.get_id() as i64,
-                        prisma::user::id::equals(user_id.get_id() as i64),
+                        user.email_address.id.to_id_signed(),
+                        prisma::user::id::equals(user_id.to_id_signed()),
                         user.email_address.email_address.clone(),
                         vec![],
                     )
@@ -225,8 +234,8 @@ impl<'a> UserBuilder<'a> {
                     client
                         .basic_auth()
                         .create(
-                            basic_auth.id.get_id() as i64,
-                            prisma::user::id::equals(user_id.get_id() as i64),
+                            basic_auth.id.to_id_signed(),
+                            prisma::user::id::equals(user_id.to_id_signed()),
                             basic_auth.username.clone(),
                             basic_auth.password_hash.clone(),
                             vec![],
@@ -239,8 +248,8 @@ impl<'a> UserBuilder<'a> {
                     client
                         .user_metadata()
                         .create(
-                            metadata.id.get_id() as i64,
-                            prisma::user::id::equals(user_id.get_id() as i64),
+                            metadata.id.to_id_signed(),
+                            prisma::user::id::equals(user_id.to_id_signed()),
                             metadata.key.clone(),
                             metadata.value.clone(),
                             vec![],
