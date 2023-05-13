@@ -3,19 +3,31 @@
 
 use std::sync::Arc;
 
+use crypto::snowflake::SnowflakeGenerator;
+
+use crate::models::PrismaClient;
+
 /// `State` represents the server's global state.
 #[derive(Debug)]
-pub struct State {}
-
-impl State {
-    pub fn new() -> Self {
-        Self {}
-    }
+pub struct State {
+    prisma: PrismaClient,
+    id_generator: SnowflakeGenerator,
 }
 
-impl Default for State {
-    fn default() -> Self {
-        Self::new()
+impl State {
+    pub fn new(prisma: PrismaClient, id_generator: SnowflakeGenerator) -> Self {
+        Self {
+            prisma,
+            id_generator,
+        }
+    }
+
+    pub fn prisma(&self) -> &PrismaClient {
+        &self.prisma
+    }
+
+    pub fn id_generator(&self) -> &SnowflakeGenerator {
+        &self.id_generator
     }
 }
 

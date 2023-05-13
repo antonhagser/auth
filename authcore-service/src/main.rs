@@ -31,6 +31,9 @@ static SERVICE_DATA: Lazy<ServiceData> = Lazy::new(|| ServiceData {
     service_version: env!("CARGO_PKG_VERSION"),
 });
 
+static DATABASE_URL: Lazy<String> =
+    once_cell::sync::Lazy::new(|| std::env::var("DATABASE_URL").expect("DATABASE_URL must be set"));
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // tracing_subscriber::fmt::init();
@@ -38,7 +41,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("starting service");
 
     // Create a shared app state
-    let app_state = State::new();
+    let prisma = models::PrismaClient::_builder()
+        .with_url(DATABASE_URL.to_string())
+        .build()
+        .await?;
+
+    let id_generator = crypto::snowflake::SnowflakeGenerator::new(0);
+
+    let app_state = State::new(prisma, id_generator);
     let app_state = Arc::new(app_state);
 
     // If we are running in debug mode, bind to localhost

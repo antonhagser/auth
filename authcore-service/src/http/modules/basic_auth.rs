@@ -21,7 +21,7 @@ pub mod register;
 /// Router for handling routing within basic_auth.
 pub fn router(state: AppState) -> Router {
     Router::new()
-        .with_state(state)
         .route("/login", post(login::route))
         .route("/register", post(register::route))
+        .with_state(state)
 }

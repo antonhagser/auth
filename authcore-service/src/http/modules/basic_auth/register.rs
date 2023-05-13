@@ -1,6 +1,8 @@
-use axum::Json;
+use axum::{extract::State, Json};
 use hyper::StatusCode;
 
-pub async fn route() -> (StatusCode, Json<()>) {
+use crate::state::AppState;
+
+pub async fn route(State(_state): State<AppState>) -> (StatusCode, Json<()>) {
     (StatusCode::OK, Json(()))
 }

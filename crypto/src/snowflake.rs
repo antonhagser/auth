@@ -16,12 +16,14 @@ use std::thread;
 use std::time::Duration;
 
 use chrono::{DateTime, NaiveDateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 /// Customize the start time as desired
 const UNIX_START_TIME: i64 = 1_589_870_119_000;
 
 /// The Snowflake struct represents a unique and sortable ID.
-#[derive(Debug, Eq)]
+#[allow(clippy::derived_hash_with_manual_eq)] // There's a test to verify that the PartialEq implementation is correct and works with hashing.
+#[derive(Debug, Clone, Eq, Copy, Serialize, Deserialize, Default, Hash)]
 pub struct Snowflake {
     timestamp: i64,
     worker_id: u8,
@@ -107,6 +109,42 @@ impl PartialEq for Snowflake {
     }
 }
 
+impl PartialEq<u64> for Snowflake {
+    fn eq(&self, other: &u64) -> bool {
+        self.get_id() == *other
+    }
+}
+
+impl PartialEq<Snowflake> for u64 {
+    fn eq(&self, other: &Snowflake) -> bool {
+        *self == other.get_id()
+    }
+}
+
+impl PartialEq<i64> for Snowflake {
+    fn eq(&self, other: &i64) -> bool {
+        self.get_id() as i64 == *other
+    }
+}
+
+impl PartialEq<Snowflake> for i64 {
+    fn eq(&self, other: &Snowflake) -> bool {
+        *self == other.get_id() as i64
+    }
+}
+
+impl PartialEq<str> for Snowflake {
+    fn eq(&self, other: &str) -> bool {
+        self.get_id().to_string() == other
+    }
+}
+
+impl PartialEq<Snowflake> for str {
+    fn eq(&self, other: &Snowflake) -> bool {
+        self == other.get_id().to_string()
+    }
+}
+
 /// The SnowflakeGenerator is a thread-safe structure for generating unique Snowflakes.
 #[derive(Debug)]
 pub struct SnowflakeGenerator {
@@ -155,5 +193,47 @@ impl SnowflakeGenerator {
                 thread::sleep(sleep_duration);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+    };
+
+    use super::SnowflakeGenerator;
+
+    #[test]
+    fn test_hash_and_partial_eq() {
+        let gen = SnowflakeGenerator::new(0);
+        let k1 = gen.next_snowflake();
+        let k2 = k1;
+
+        assert_eq!(k1, k2);
+
+        let mut map = std::collections::HashMap::new();
+        map.insert(k1, 1);
+
+        assert_eq!(map.get(&k2), Some(&1));
+
+        let k3 = gen.next_snowflake();
+
+        assert_ne!(k1, k3);
+
+        map.insert(k3, 2);
+
+        assert_eq!(map.get(&k3), Some(&2));
+
+        let mut hasher = DefaultHasher::new();
+        k1.hash(&mut hasher);
+        let k1_hash = hasher.finish();
+
+        let mut hasher = DefaultHasher::new();
+        k2.hash(&mut hasher);
+        let k2_hash = hasher.finish();
+
+        assert_eq!(k1_hash, k2_hash);
     }
 }

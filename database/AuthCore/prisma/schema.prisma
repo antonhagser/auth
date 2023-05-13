@@ -8,7 +8,7 @@ generator client {
     output   = "../../../authcore-service/src/models/prisma.rs"
 }
 
-model Account {
+model User {
     id BigInt @id @unique
 
     firstName String?
@@ -16,9 +16,9 @@ model Account {
 
     emailAddress EmailAddress?
 
-    externalAccounts ExternalAccount[]
-    basicAuth        BasicAuth?
-    passwordEnabled  Boolean           @default(false)
+    externalUsers   ExternalUser[]
+    basicAuth       BasicAuth?
+    passwordEnabled Boolean        @default(false)
 
     lastLoginAt DateTime?
     lastLoginIP String?
@@ -26,9 +26,9 @@ model Account {
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
-    sessions        Session[]
-    accountTokens   AccountToken[]
-    accountMetadata AccountMetadata[]
+    sessions     Session[]
+    userTokens   UserToken[]
+    userMetadata UserMetadata[]
 
     application   Application @relation(fields: [applicationID], references: [id], onDelete: Cascade)
     applicationID BigInt      @unique
@@ -39,10 +39,10 @@ model Account {
 model EmailAddress {
     id BigInt @id @unique
 
-    account   Account @relation(fields: [accountID], references: [id], onDelete: Cascade)
-    accountID BigInt  @unique
+    user   User   @relation(fields: [userID], references: [id], onDelete: Cascade)
+    userID BigInt @unique
 
-    email String @unique
+    email_address String @unique
 
     verified   Boolean   @default(false)
     verifiedAt DateTime?
@@ -51,17 +51,17 @@ model EmailAddress {
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
-    @@index([email])
+    @@index([email_address])
 }
 
-model ExternalAccount {
+model ExternalUser {
     id BigInt @id @unique
 
-    account   Account @relation(fields: [accountID], references: [id], onDelete: Cascade)
-    accountID BigInt
+    user   User   @relation(fields: [userID], references: [id], onDelete: Cascade)
+    userID BigInt
 
-    provider          String
-    providerAccountID String
+    provider       String
+    providerUserID String
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
@@ -70,18 +70,21 @@ model ExternalAccount {
 model BasicAuth {
     id BigInt @id @unique
 
-    account   Account @relation(fields: [accountID], references: [id], onDelete: Cascade)
-    accountID BigInt  @unique
+    user   User   @relation(fields: [userID], references: [id], onDelete: Cascade)
+    userID BigInt @unique
 
-    accountname String @unique
-    password    String
+    username      String @unique
+    password_hash String
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
 }
 
 model Session {
     id BigInt @id @unique
 
-    account   Account @relation(fields: [accountID], references: [id], onDelete: Cascade)
-    accountID BigInt
+    user   User   @relation(fields: [userID], references: [id], onDelete: Cascade)
+    userID BigInt
 
     token String @unique
 
@@ -89,33 +92,34 @@ model Session {
     blacklistedAt DateTime?
 
     createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
 }
 
-enum AccountTokenType {
+enum UserTokenType {
     EMAIL_VERIFICATION
     PASSWORD_RESET
 }
 
-model AccountToken {
+model UserToken {
     id BigInt @id @unique
 
-    account   Account @relation(fields: [accountID], references: [id], onDelete: Cascade)
-    accountID BigInt
+    user   User   @relation(fields: [userID], references: [id], onDelete: Cascade)
+    userID BigInt
 
-    tokenType AccountTokenType
-
-    token String @unique
-
-    used Boolean @default(false)
+    tokenType UserTokenType
+    token     String        @unique
 
     createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([token])
 }
 
-model AccountMetadata {
+model UserMetadata {
     id BigInt @id @unique
 
-    account   Account @relation(fields: [accountID], references: [id], onDelete: Cascade)
-    accountID BigInt  @unique
+    user   User   @relation(fields: [userID], references: [id], onDelete: Cascade)
+    userID BigInt @unique
 
     key   String
     value String
@@ -133,7 +137,7 @@ model Application {
 
     applicationMetadata ApplicationMetadata[]
 
-    accounts       Account[]
+    users          User[]
     Organization   Organization? @relation(fields: [organizationId], references: [id])
     organizationId BigInt?
 
