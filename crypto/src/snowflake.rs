@@ -134,10 +134,8 @@ impl SnowflakeGenerator {
 /// * `process_id`: The ID of the process that created the Snowflake.
 /// * `sequence`: The sequence number of the Snowflake.
 #[allow(clippy::derived_hash_with_manual_eq)] // There's a test to verify that the PartialEq implementation is correct and works with hashing.
-#[derive(Debug, Clone, Copy, Hash)]
-pub struct Snowflake {
-    id: u64,
-}
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Snowflake(u64);
 
 impl Serialize for Snowflake {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -162,7 +160,7 @@ pub struct SnowflakeComponents {
 
 impl Snowflake {
     pub fn new(id: u64) -> Self {
-        Snowflake { id }
+        Snowflake(id)
     }
 
     pub fn new_from_components(
@@ -171,9 +169,14 @@ impl Snowflake {
         process_id: u64,
         sequence: u64,
     ) -> Self {
-        Snowflake {
-            id: Snowflake::from_components(timestamp, worker_id, process_id, sequence),
-        }
+        Snowflake(Snowflake::from_components(
+            timestamp, worker_id, process_id, sequence,
+        ))
+    }
+
+    /// Returns the ID of the Snowflake.
+    pub fn id(&self) -> u64 {
+        self.0
     }
 
     /// Returns the individual components of the Snowflake.
@@ -184,10 +187,10 @@ impl Snowflake {
     /// * `process_id`
     /// * `sequence`
     pub fn to_components(&self) -> SnowflakeComponents {
-        let timestamp = (self.id >> 22) & ((1 << 41) - 1);
-        let worker_id = (self.id >> 17) & ((1 << 5) - 1);
-        let process_id = (self.id >> 12) & ((1 << 5) - 1);
-        let sequence = self.id & ((1 << 12) - 1);
+        let timestamp = (self.id() >> 22) & ((1 << 41) - 1);
+        let worker_id = (self.id() >> 17) & ((1 << 5) - 1);
+        let process_id = (self.id() >> 12) & ((1 << 5) - 1);
+        let sequence = self.id() & ((1 << 12) - 1);
 
         SnowflakeComponents {
             timestamp,
@@ -211,7 +214,7 @@ impl Snowflake {
 
     /// Returns the Snowflake as a u64.
     pub fn to_id(&self) -> u64 {
-        self.id
+        self.id()
     }
 
     /// Parses a Snowflake into its components.
@@ -224,7 +227,7 @@ impl Snowflake {
     ///
     /// This function will panic if the most significant bit of the timestamp is set.
     fn validate_id(&self) -> Result<(), SnowflakeError> {
-        let components = Snowflake::new(self.id).to_components();
+        let components = Snowflake::new(self.id()).to_components();
 
         if components.timestamp + SNOWFLAKE_EPOCH > chrono::Utc::now().timestamp_millis() as u64 {
             Err(SnowflakeError::InvalidTimestamp)
@@ -255,22 +258,22 @@ impl Snowflake {
 
     /// Returns the timestamp of the Snowflake.
     fn timestamp(&self) -> u64 {
-        (self.id >> 22) & ((1 << 41) - 1)
+        (self.id() >> 22) & ((1 << 41) - 1)
     }
 
     /// Returns the worker ID of the Snowflake.
     pub fn worker_id(&self) -> u64 {
-        (self.id >> 17) & ((1 << WORKER_ID_BITS) - 1)
+        (self.id() >> 17) & ((1 << WORKER_ID_BITS) - 1)
     }
 
     /// Returns the process ID of the Snowflake.
     pub fn process_id(&self) -> u64 {
-        (self.id >> 12) & ((1 << PROCESS_ID_BITS) - 1)
+        (self.id() >> 12) & ((1 << PROCESS_ID_BITS) - 1)
     }
 
     /// Returns the sequence of the Snowflake.
     pub fn sequence(&self) -> u64 {
-        self.id & ((1 << SEQUENCE_BITS) - 1)
+        self.id() & ((1 << SEQUENCE_BITS) - 1)
     }
 
     /// Returns the creation time of the Snowflake.
@@ -284,20 +287,6 @@ impl Snowflake {
     pub fn time(&self) -> DateTime<Utc> {
         let timestamp = (self.timestamp() + SNOWFLAKE_EPOCH) as i64;
         Utc.timestamp_millis_opt(timestamp).unwrap()
-    }
-}
-
-impl Eq for Snowflake {}
-
-impl PartialEq for Snowflake {
-    fn eq(&self, other: &Self) -> bool {
-        let components = self.to_components();
-        let other = other.to_components();
-
-        components.timestamp == other.timestamp
-            && components.worker_id == other.worker_id
-            && components.process_id == other.process_id
-            && components.sequence == other.sequence
     }
 }
 
@@ -550,5 +539,14 @@ mod tests {
         let r = Snowflake::try_from(invalid_id);
 
         assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_snowflake_ordering() {
+        let sg = SnowflakeGenerator::new(2, 2);
+        let id1 = sg.next_snowflake().unwrap();
+        let id2 = sg.next_snowflake().unwrap();
+
+        assert!(id1 < id2);
     }
 }
