@@ -5,7 +5,7 @@ datasource db {
 
 generator client {
     provider = "cargo prisma"
-    output   = "../../../authcore-service/src/models/prisma.rs"
+    output   = "../../../services/authcore/src/models/prisma.rs"
 }
 
 model User {

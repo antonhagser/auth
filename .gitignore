@@ -3,3 +3,4 @@
 api.json
 testing-crate
 .gitignore
+prisma.rs
