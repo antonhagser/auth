@@ -16,6 +16,10 @@ The authentication service is the main service of the platform. It handles all a
 -   Verify tokens such as access tokens and refresh tokens, email verification tokens, and password reset tokens
 -   Connect with third-party user databases such as LDAP and Active Directory
 
+#### Future plans
+
+Move parts such as token validation out of AuthCore into an Edge Service. While scaling AuthCore horizontally is possible (and should be done, within reason), it would be better to move the token validation logic into a seperate service to reduce the load on AuthCore, having a separate service for token validation would also allow for more flexibility in the future.
+
 ### Platform Service
 
 The dashboard is the main interface for the platform. It is an application that allows administrators to manage users, clients, and other settings.
@@ -52,10 +56,6 @@ These services are not required for the platform to work, but they would be usef
 The webhook service will be responsible for sending webhooks to applications when certain events happen. For example, when a user logs in, the webhook service will send a webhook to the application to notify it of the event.
 
 This service would most likely take advantage of a similar pub/sub system as the one used by the logging service. The authentication service would publish events to the webhook service. The webhook service would then send webhooks to applications.
-
-### Core Service
-
-This service would be the source of truth for data such as applications, organizations, and users. It would be responsible for storing and managing this data. The authentication service would then be responsible for validating credentials and generating tokens.
 
 ### Internal Monitoring Service
 

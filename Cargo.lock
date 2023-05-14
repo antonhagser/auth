@@ -176,7 +176,29 @@ dependencies = [
 ]
 
 [[package]]
-name = "authcore-service"
+name = "auditlog"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "console-subscriber",
+ "crypto",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tonic 0.9.2",
+ "tonic-build",
+ "tracing",
+ "tracing-subscriber",
+ "utoipa",
+ "utoipa-swagger-ui",
+ "uuid",
+]
+
+[[package]]
+name = "authcore"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2359,28 +2381,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "logging-service"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "console-subscriber",
- "crypto",
- "serde",
- "serde_derive",
- "serde_json",
- "thiserror",
- "tokio",
- "tonic 0.9.2",
- "tonic-build",
- "tracing",
- "tracing-subscriber",
- "utoipa",
- "utoipa-swagger-ui",
- "uuid",
-]
-
-[[package]]
 name = "lru"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2476,6 +2476,10 @@ checksum = "d61c719bcfbcf5d62b3a09efa6088de8c54bc0bfcd3ea7ae39fcc186108b8de1"
 dependencies = [
  "autocfg",
 ]
+
+[[package]]
+name = "messaging"
+version = "0.1.0"
 
 [[package]]
 name = "metrics"
@@ -3458,7 +3462,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26072860ba924cbfa98ea39c8c19b4dd6a4a25423dbdf219c1eca91aa0cf6964"
 
 [[package]]
-name = "platform-service"
+name = "platform"
 version = "0.1.0"
 dependencies = [
  "crypto",
@@ -6016,6 +6020,10 @@ dependencies = [
  "js-sys",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "webhook"
+version = "0.1.0"
 
 [[package]]
 name = "webpki"
