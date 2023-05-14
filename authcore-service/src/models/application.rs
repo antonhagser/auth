@@ -76,7 +76,7 @@ impl<'a> ApplicationBuilder<'a> {
             .await?;
 
         let application = Application {
-            id: application.id.into(),
+            id: application.id.try_into().unwrap(),
             name: application.name,
             created_at: application.created_at.into(),
             updated_at: application.updated_at.into(),

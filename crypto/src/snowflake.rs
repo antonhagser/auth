@@ -15,27 +15,20 @@ use std::{
 
 use chrono::{DateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
-/// The `Snowflake` struct represents a unique and sortable ID.
-///
-/// This structure contains four fields:
-/// * `timestamp`: The time when the Snowflake was created.
-/// * `worker_id`: The ID of the worker that created the Snowflake.
-/// * `process_id`: The ID of the process that created the Snowflake.
-/// * `sequence`: The sequence number of the Snowflake.
-#[allow(clippy::derived_hash_with_manual_eq)] // There's a test to verify that the PartialEq implementation is correct and works with hashing.
-#[derive(Clone, Eq, Copy, Serialize, Deserialize, Default, Hash)]
-pub struct Snowflake {
-    timestamp: u64,
-    worker_id: u64,
-    process_id: u64,
-    sequence: u64,
-}
-
-impl std::fmt::Debug for Snowflake {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("Snowflake").field(&self.to_id()).finish()
-    }
+#[derive(Debug, Error)]
+pub enum SnowflakeError {
+    #[error("Invalid snowflake")]
+    InvalidInput,
+    #[error("Invalid sequnce ID")]
+    InvalidSequenceId,
+    #[error("Invalid worker ID")]
+    InvalidWorkerId,
+    #[error("Invalid process ID")]
+    InvalidProcessId,
+    #[error("Invalid timestamp")]
+    InvalidTimestamp,
 }
 
 /// The `SnowflakeGenerator` struct is responsible for creating new Snowflakes.
@@ -50,20 +43,20 @@ pub struct SnowflakeGenerator {
     sequence: AtomicU64,
 }
 
+/// Represents the epoch timestamp used for Snowflake generation.
+const SNOWFLAKE_EPOCH: u64 = 1_683_992_570_782; // 2020-05-19T06:35:19Z
+
+// Bits allocated for each component in the Snowflake
+const WORKER_ID_BITS: u64 = 5;
+const PROCESS_ID_BITS: u64 = 5;
+const SEQUENCE_BITS: u64 = 12;
+
+// Maximum values for each component in the Snowflake
+const MAX_WORKER_ID: u64 = (1 << WORKER_ID_BITS) - 1;
+const MAX_PROCESS_ID: u64 = (1 << PROCESS_ID_BITS) - 1;
+const MAX_SEQUENCE: u64 = (1 << SEQUENCE_BITS) - 1;
+
 impl SnowflakeGenerator {
-    /// Represents the epoch timestamp used for Snowflake generation.
-    const SNOWFLAKE_EPOCHE: u64 = 1_683_992_570_782; // 2020-05-19T06:35:19Z
-
-    // Bits allocated for each component in the Snowflake
-    const WORKER_ID_BITS: u64 = 5;
-    const PROCESS_ID_BITS: u64 = 5;
-    const SEQUENCE_BITS: u64 = 12;
-
-    // Maximum values for each component in the Snowflake
-    const MAX_WORKER_ID: u64 = (1 << Self::WORKER_ID_BITS) - 1;
-    const MAX_PROCESS_ID: u64 = (1 << Self::PROCESS_ID_BITS) - 1;
-    const MAX_SEQUENCE: u64 = (1 << Self::SEQUENCE_BITS) - 1;
-
     /// Creates a new SnowflakeGenerator with the given worker and process IDs.
     ///
     /// # Arguments
@@ -75,8 +68,8 @@ impl SnowflakeGenerator {
     ///
     /// This function will panic if the worker_id or the process_id is higher than the maximum allowed values.
     pub fn new(worker_id: u64, process_id: u64) -> Self {
-        assert!(worker_id <= Self::MAX_WORKER_ID);
-        assert!(process_id <= Self::MAX_PROCESS_ID);
+        assert!(worker_id <= MAX_WORKER_ID);
+        assert!(process_id <= MAX_PROCESS_ID);
 
         SnowflakeGenerator {
             worker_id,
@@ -101,20 +94,20 @@ impl SnowflakeGenerator {
             .duration_since(UNIX_EPOCH)
             .map_err(|_| "SystemTime before UNIX EPOCH")?
             .as_millis() as u64
-            - Self::SNOWFLAKE_EPOCHE;
+            - SNOWFLAKE_EPOCH;
 
         let mut last_timestamp = self.last_timestamp.lock().map_err(|_| "Mutex poisoned")?;
 
         if timestamp == *last_timestamp {
             let sequence = self.sequence.fetch_add(1, Ordering::SeqCst);
 
-            if sequence > Self::MAX_SEQUENCE {
+            if sequence > MAX_SEQUENCE {
                 while timestamp <= *last_timestamp {
                     timestamp = SystemTime::now()
                         .duration_since(UNIX_EPOCH)
                         .map_err(|_| "SystemTime before UNIX EPOCH")?
                         .as_millis() as u64
-                        - Self::SNOWFLAKE_EPOCHE;
+                        - SNOWFLAKE_EPOCH;
                 }
             }
         } else {
@@ -124,19 +117,126 @@ impl SnowflakeGenerator {
         *last_timestamp = timestamp;
         let sequence = self.sequence.load(Ordering::SeqCst);
 
-        Ok(Snowflake {
+        Ok(Snowflake::new_from_components(
             timestamp,
-            worker_id: self.worker_id,
-            process_id: self.process_id,
+            self.worker_id,
+            self.process_id,
             sequence,
-        })
+        ))
     }
 }
 
+/// The `Snowflake` struct represents a unique and sortable ID.
+///
+/// This structure contains four fields:
+/// * `timestamp`: The time when the Snowflake was created.
+/// * `worker_id`: The ID of the worker that created the Snowflake.
+/// * `process_id`: The ID of the process that created the Snowflake.
+/// * `sequence`: The sequence number of the Snowflake.
+#[allow(clippy::derived_hash_with_manual_eq)] // There's a test to verify that the PartialEq implementation is correct and works with hashing.
+#[derive(Debug, Clone, Copy, Hash)]
+pub struct Snowflake {
+    id: u64,
+}
+
+impl Serialize for Snowflake {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for Snowflake {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+
+        Snowflake::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+pub struct SnowflakeComponents {
+    pub timestamp: u64,
+    pub worker_id: u64,
+    pub process_id: u64,
+    pub sequence: u64,
+}
+
 impl Snowflake {
+    pub fn new(id: u64) -> Self {
+        Snowflake { id }
+    }
+
+    pub fn new_from_components(
+        timestamp: u64,
+        worker_id: u64,
+        process_id: u64,
+        sequence: u64,
+    ) -> Self {
+        Snowflake {
+            id: Snowflake::from_components(timestamp, worker_id, process_id, sequence),
+        }
+    }
+
+    /// Returns the individual components of the Snowflake.
+    ///
+    /// The components are returned in the following order:
+    /// * `timestamp`
+    /// * `worker_id`
+    /// * `process_id`
+    /// * `sequence`
+    pub fn to_components(&self) -> SnowflakeComponents {
+        let timestamp = (self.id >> 22) & ((1 << 41) - 1);
+        let worker_id = (self.id >> 17) & ((1 << 5) - 1);
+        let process_id = (self.id >> 12) & ((1 << 5) - 1);
+        let sequence = self.id & ((1 << 12) - 1);
+
+        SnowflakeComponents {
+            timestamp,
+            worker_id,
+            process_id,
+            sequence,
+        }
+    }
+
+    /// Creates a Snowflake from the given components.
+    ///
+    /// # Arguments
+    ///
+    /// * `timestamp` - The timestamp of the Snowflake.
+    /// * `worker_id` - The worker ID of the Snowflake.
+    /// * `process_id` - The process ID of the Snowflake.
+    /// * `sequence` - The sequence number of the Snowflake.
+    pub fn from_components(timestamp: u64, worker_id: u64, process_id: u64, sequence: u64) -> u64 {
+        (timestamp << 22) | (worker_id << 17) | (process_id << 12) | sequence
+    }
+
     /// Returns the Snowflake as a u64.
     pub fn to_id(&self) -> u64 {
-        (self.timestamp << 22) | (self.worker_id << 17) | (self.process_id << 12) | self.sequence
+        self.id
+    }
+
+    /// Parses a Snowflake into its components.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The Snowflake to parse.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the most significant bit of the timestamp is set.
+    fn validate_id(&self) -> Result<(), SnowflakeError> {
+        let components = Snowflake::new(self.id).to_components();
+
+        if components.timestamp + SNOWFLAKE_EPOCH > chrono::Utc::now().timestamp_millis() as u64 {
+            Err(SnowflakeError::InvalidTimestamp)
+        } else if components.worker_id > MAX_WORKER_ID {
+            Err(SnowflakeError::InvalidWorkerId)
+        } else if components.process_id > MAX_PROCESS_ID {
+            Err(SnowflakeError::InvalidProcessId)
+        } else if components.sequence > MAX_SEQUENCE {
+            Err(SnowflakeError::InvalidSequenceId)
+        } else {
+            Ok(())
+        }
     }
 
     /// Returns the Snowflake as a i64.
@@ -148,42 +248,56 @@ impl Snowflake {
     /// This function will panic if the most significant bit of the timestamp is set.
     pub fn to_id_signed(&self) -> i64 {
         // Make sure the most significant bit is not set. If it is, panic.
-        assert!(self.timestamp < 1 << 41);
+        assert!(self.timestamp() < 1 << 41);
 
         self.to_id() as i64
     }
 
     /// Returns the timestamp of the Snowflake.
-    pub fn timestamp(&self) -> u64 {
-        self.timestamp
+    fn timestamp(&self) -> u64 {
+        (self.id >> 22) & ((1 << 41) - 1)
     }
 
     /// Returns the worker ID of the Snowflake.
     pub fn worker_id(&self) -> u64 {
-        self.worker_id
-    }
-
-    /// Returns the sequence of the Snowflake.
-    pub fn sequence(&self) -> u64 {
-        self.sequence
+        (self.id >> 17) & ((1 << WORKER_ID_BITS) - 1)
     }
 
     /// Returns the process ID of the Snowflake.
     pub fn process_id(&self) -> u64 {
-        self.process_id
+        (self.id >> 12) & ((1 << PROCESS_ID_BITS) - 1)
+    }
+
+    /// Returns the sequence of the Snowflake.
+    pub fn sequence(&self) -> u64 {
+        self.id & ((1 << SEQUENCE_BITS) - 1)
     }
 
     /// Returns the creation time of the Snowflake.
     ///
     /// The returned value is the number of milliseconds since Discord epoch.
     pub fn creation_time(&self) -> u64 {
-        self.timestamp + SnowflakeGenerator::SNOWFLAKE_EPOCHE
+        self.timestamp() + SNOWFLAKE_EPOCH
     }
 
     /// Returns the creation time of the Snowflake as a `chrono::DateTime<Utc>`.
     pub fn time(&self) -> DateTime<Utc> {
-        let timestamp = (self.timestamp + SnowflakeGenerator::SNOWFLAKE_EPOCHE) as i64;
+        let timestamp = (self.timestamp() + SNOWFLAKE_EPOCH) as i64;
         Utc.timestamp_millis_opt(timestamp).unwrap()
+    }
+}
+
+impl Eq for Snowflake {}
+
+impl PartialEq for Snowflake {
+    fn eq(&self, other: &Self) -> bool {
+        let components = self.to_components();
+        let other = other.to_components();
+
+        components.timestamp == other.timestamp
+            && components.worker_id == other.worker_id
+            && components.process_id == other.process_id
+            && components.sequence == other.sequence
     }
 }
 
@@ -194,74 +308,65 @@ impl std::fmt::Display for Snowflake {
     }
 }
 
-impl From<u64> for Snowflake {
-    fn from(id: u64) -> Self {
-        let timestamp = id >> 22;
-        let worker_id = (id & 0x3E0000) >> 17;
-        let process_id = (id & 0x1F000) >> 12;
-        let sequence = id & 0xFFF;
+impl FromStr for Snowflake {
+    type Err = SnowflakeError;
 
-        Snowflake {
-            timestamp,
-            worker_id,
-            process_id,
-            sequence,
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let id = s.parse::<u64>().map_err(|_| SnowflakeError::InvalidInput)?;
+
+        // Check if the ID is a valid snowflake
+        let id = Snowflake::new(id);
+        if let Err(err) = id.validate_id() {
+            Err(err)
+        } else {
+            Ok(id)
         }
     }
 }
 
-impl From<i64> for Snowflake {
-    fn from(id: i64) -> Self {
-        // If the id is negative, convert it to positive
-        let id = id.unsigned_abs();
-        Snowflake::from(id)
+impl TryFrom<u64> for Snowflake {
+    type Error = SnowflakeError;
+
+    fn try_from(id: u64) -> Result<Self, Self::Error> {
+        let id = Snowflake::new(id);
+        id.validate_id()?;
+        Ok(id)
     }
 }
 
-impl FromStr for Snowflake {
-    type Err = std::num::ParseIntError;
+impl TryFrom<i64> for Snowflake {
+    type Error = SnowflakeError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let id = s.parse::<u64>()?;
-        Ok(Snowflake::from(id))
+    fn try_from(id: i64) -> Result<Self, Self::Error> {
+        Snowflake::try_from(id as u64)
     }
 }
 
-impl From<&str> for Snowflake {
-    fn from(id: &str) -> Self {
-        Snowflake::from_str(id).unwrap()
+impl TryFrom<String> for Snowflake {
+    type Error = SnowflakeError;
+
+    fn try_from(id: String) -> Result<Self, Self::Error> {
+        Snowflake::try_from(id.as_str())
     }
 }
 
-impl From<String> for Snowflake {
-    fn from(id: String) -> Self {
-        Snowflake::from_str(&id).unwrap()
-    }
-}
+impl TryFrom<&str> for Snowflake {
+    type Error = SnowflakeError;
 
-impl PartialOrd for Snowflake {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.timestamp.partial_cmp(&other.timestamp)
-    }
-}
-
-impl Ord for Snowflake {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.timestamp.cmp(&other.timestamp)
-    }
-}
-
-impl PartialEq for Snowflake {
-    fn eq(&self, other: &Self) -> bool {
-        self.timestamp == other.timestamp
-            && self.worker_id == other.worker_id
-            && self.sequence == other.sequence
+    fn try_from(id: &str) -> Result<Self, Self::Error> {
+        Snowflake::from_str(id)
     }
 }
 
 impl PartialEq<u64> for Snowflake {
     fn eq(&self, other: &u64) -> bool {
         self.to_id() == *other
+    }
+}
+
+impl PartialEq<i64> for Snowflake {
+    fn eq(&self, other: &i64) -> bool {
+        self.to_id() as i64 == *other
     }
 }
 
@@ -286,5 +391,164 @@ impl PartialEq<str> for Snowflake {
 impl PartialEq<Snowflake> for str {
     fn eq(&self, other: &Snowflake) -> bool {
         self == other.to_id().to_string()
+    }
+}
+
+impl PartialEq<String> for Snowflake {
+    fn eq(&self, other: &String) -> bool {
+        self.to_id().to_string() == *other
+    }
+}
+
+impl PartialEq<Snowflake> for String {
+    fn eq(&self, other: &Snowflake) -> bool {
+        self == &other.to_id().to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        collections::hash_map::RandomState,
+        hash::{BuildHasher, Hash, Hasher},
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_snowflake_hash_equality() {
+        let sf1 = Snowflake::new_from_components(123, 12, 6, 1);
+        let sf2 = Snowflake::new_from_components(123, 12, 6, 1);
+
+        let s = RandomState::new();
+
+        let mut hasher = s.build_hasher();
+        sf1.hash(&mut hasher);
+        let hash1 = hasher.finish();
+
+        let mut hasher = s.build_hasher();
+        sf2.hash(&mut hasher);
+        let hash2 = hasher.finish();
+
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_snowflake_equality() {
+        let sf1 = Snowflake::new_from_components(123, 12, 6, 1);
+        let sf2 = Snowflake::new_from_components(123, 12, 6, 1);
+        let sf3 = Snowflake::new_from_components(123, 12, 2, 1);
+
+        assert_eq!(sf1, sf2);
+        assert_ne!(sf1, sf3);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_snowflake_equality_should_panic() {
+        let sf1 = Snowflake::new_from_components(123, 12, 6, 1);
+        let sf2 = Snowflake::new_from_components(123, 12, 6, 2);
+        let sf3 = Snowflake::new_from_components(123, 12, 2, 3);
+
+        assert_eq!(sf1, sf2);
+        assert_ne!(sf1, sf3);
+    }
+
+    #[test]
+    fn test_snowflake_u64_equality() {
+        let sf = Snowflake::new_from_components(123, 12, 6, 1);
+        let id = sf.to_id();
+
+        assert_eq!(sf, id);
+        assert_eq!(id, sf);
+    }
+
+    #[test]
+    fn test_snowflake_i64_equality() {
+        let sf = Snowflake::new_from_components(123, 12, 6, 1);
+        let id = sf.to_id() as i64;
+
+        assert_eq!(sf, id);
+        assert_eq!(id, sf);
+    }
+
+    #[test]
+    fn test_snowflake_str_equality() {
+        let sf = Snowflake::new_from_components(123, 12, 6, 1);
+        let id_str = sf.to_id().to_string();
+
+        assert_eq!(sf, id_str);
+        assert_eq!(id_str, sf);
+    }
+
+    #[test]
+    fn test_snowflake_from_i64() {
+        let sf = SnowflakeGenerator::new(7, 12).next_snowflake().unwrap();
+        let id = sf.to_id_signed();
+
+        let res = Snowflake::try_from(id);
+
+        assert!(res.is_ok());
+        assert_eq!(sf, res.unwrap());
+    }
+
+    #[test]
+    fn test_snowflake_from_u64() {
+        let w = 2;
+        let p = 4;
+
+        let sf = SnowflakeGenerator::new(2, 4).next_snowflake().unwrap();
+        let id = sf.to_id();
+
+        let res = Snowflake::try_from(id);
+
+        assert!(res.is_ok());
+        let id = res.unwrap();
+
+        assert_eq!(id.worker_id(), w);
+        assert_eq!(id.process_id(), p);
+        assert_eq!(sf, id);
+    }
+
+    #[test]
+    fn test_snowflake_string_equality() {
+        let sf = Snowflake::new_from_components(123, 12, 6, 1);
+        let id_str = sf.to_id().to_string();
+
+        assert_eq!(sf, id_str);
+        assert_eq!(id_str, sf);
+    }
+
+    #[test]
+    fn test_snowflake_from_str() {
+        let sf = Snowflake::new_from_components(123, 12, 6, 1);
+        let id_str = sf.to_id().to_string();
+
+        assert_eq!(sf, Snowflake::from_str(&id_str).unwrap());
+    }
+
+    #[test]
+    fn test_snowflake_from_string() {
+        let sf = Snowflake::new_from_components(123, 12, 6, 1);
+        let id_str = sf.to_id().to_string();
+
+        let res = Snowflake::try_from(id_str);
+
+        assert!(res.is_ok());
+        assert_eq!(sf, res.unwrap());
+    }
+
+    #[test]
+    fn test_snowflake_from_invalid_str() {
+        let invalid_id = "This is not a snowflake id";
+        assert!(Snowflake::from_str(invalid_id).is_err());
+    }
+
+    #[test]
+    fn test_snowflake_from_invalid_id() {
+        let invalid_id = -232i64;
+        let r = Snowflake::try_from(invalid_id);
+
+        assert!(r.is_err());
     }
 }
