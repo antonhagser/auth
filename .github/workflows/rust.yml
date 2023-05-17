@@ -49,8 +49,10 @@ jobs:
                       ${{ runner.os }}-cargo-target-${{ hashFiles('Cargo.toml') }}
                       ${{ runner.os }}-cargo-target
 
-            - name: Build Prisma
+            - name: Build AuthCore Prisma
               run: cargo prisma generate --schema=./database/AuthCore/prisma/schema.prisma
+            - name: Build Platform Prisma
+              run: cargo prisma generate --schema=./database/Platform/prisma/schema.prisma
             - name: Build
               run: cargo build --verbose --all-features
             - name: Run tests
