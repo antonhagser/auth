@@ -134,7 +134,7 @@ impl SnowflakeGenerator {
 /// * `process_id`: The ID of the process that created the Snowflake.
 /// * `sequence`: The sequence number of the Snowflake.
 #[allow(clippy::derived_hash_with_manual_eq)] // There's a test to verify that the PartialEq implementation is correct and works with hashing.
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Default, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Snowflake(u64);
 
 impl Serialize for Snowflake {

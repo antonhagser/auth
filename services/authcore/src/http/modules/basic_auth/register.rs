@@ -1,12 +1,8 @@
 use axum::{extract::State, Form, Json};
 use hyper::StatusCode;
 use serde::Deserialize;
-use tracing::info;
 
-use crate::{
-    models::{application::Application, user::User},
-    state::AppState,
-};
+use crate::{core::registration, state::AppState};
 
 #[derive(Deserialize)]
 pub struct RegisterRequest {
@@ -17,27 +13,17 @@ pub async fn route(
     State(state): State<AppState>,
     Form(data): Form<RegisterRequest>,
 ) -> (StatusCode, Json<()>) {
-    let t = std::time::Instant::now();
-    let application = Application::builder(state.id_generator(), state.prisma())
-        .name("Test Application".to_string())
-        .build()
-        .await
-        .unwrap();
-    let el = t.elapsed();
-    info!("application: {:#?}", application);
-    info!("elapsed: {:?}", el);
+    let email = data.email;
 
-    // test user register
-    let t = std::time::Instant::now();
-    let user = User::builder(state.id_generator(), state.prisma(), application.id())
-        .email_address(data.email)
-        .build()
-        .await
-        .unwrap();
-    let el = t.elapsed();
+    let data = registration::RegistrationData {
+        email,
+        username: "".to_owned(),
+        password: "".to_owned(),
+        phone_number: "".to_owned(),
+        application_id: 0,
+    };
 
-    info!("user: {:#?}", user);
-    info!("elapsed: {:?}", el);
+    let _ = registration::with_basic_auth(&state, data).await;
 
     (StatusCode::OK, Json(()))
 }

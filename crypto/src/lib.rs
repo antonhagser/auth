@@ -47,6 +47,7 @@
 //! assert!(is_valid);
 //! ````
 
+pub mod input;
 pub mod jsonwebtoken;
 pub mod paseto;
 pub mod password;

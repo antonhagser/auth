@@ -30,10 +30,10 @@ model User {
     userTokens   UserToken[]
     userMetadata UserMetadata[]
 
-    application   Application @relation(fields: [applicationID], references: [id], onDelete: Cascade)
-    applicationID BigInt      @unique
+    // Cross service references
+    applicationID BigInt
 
-    @@index([firstName, lastName])
+    @@index([firstName, lastName, applicationID])
 }
 
 model EmailAddress {
@@ -78,6 +78,8 @@ model BasicAuth {
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
+
+    @@index([username])
 }
 
 model Session {
@@ -125,63 +127,4 @@ model UserMetadata {
     value String
 
     @@index([key])
-}
-
-model Application {
-    id BigInt @id @unique
-
-    name String
-
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-
-    applicationMetadata ApplicationMetadata[]
-
-    users          User[]
-    Organization   Organization? @relation(fields: [organizationId], references: [id])
-    organizationId BigInt?
-
-    @@index([name])
-}
-
-model ApplicationMetadata {
-    id BigInt @id @unique
-
-    application   Application @relation(fields: [applicationID], references: [id], onDelete: Cascade)
-    applicationID BigInt      @unique
-
-    key   String
-    value String
-
-    @@index([key])
-}
-
-model Organization {
-    id BigInt @id @unique
-
-    name String @unique
-
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-
-    applications       Application[]
-    OrganizationMember OrganizationMember?
-
-    @@index([name])
-}
-
-enum OrganizationMemberRole {
-    ADMIN
-    MEMBER
-}
-
-model OrganizationMember {
-    id BigInt @id @unique
-
-    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-    organizationId BigInt       @unique
-
-    role OrganizationMemberRole
-
-    @@index([organizationId])
 }

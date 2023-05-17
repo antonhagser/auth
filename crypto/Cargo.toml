@@ -19,6 +19,9 @@ thiserror = "1.0.38"
 tokio = "1.28.0"
 failure = "0.1.8"
 rusty_paseto = "0.5.0"
+idna = "0.3.0"
+lazy_static = "1.4.0"
+regex = "1.8.1"
 
 [dev-dependencies]
 rand = "0.8.5"

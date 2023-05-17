@@ -883,9 +883,12 @@ dependencies = [
  "data-encoding",
  "failure",
  "hmac",
+ "idna 0.3.0",
  "jsonwebtoken",
+ "lazy_static",
  "once_cell",
  "rand 0.8.5",
+ "regex",
  "rsa",
  "rusty_paseto",
  "serde",
@@ -3466,6 +3469,9 @@ name = "platform"
 version = "0.1.0"
 dependencies = [
  "crypto",
+ "prisma-client-rust",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
