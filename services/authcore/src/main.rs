@@ -5,6 +5,7 @@ use std::{
 
 use grpc::GrpcServerError;
 use http::HTTPServerError;
+use metrics::MetricsError;
 use once_cell::sync::Lazy;
 use serde::Serialize;
 use state::AppState;
@@ -15,8 +16,10 @@ use utoipa::ToSchema;
 use crate::state::State;
 
 pub mod core;
+pub mod extended_select;
 pub mod grpc;
 pub mod http;
+pub mod metrics;
 pub mod models;
 pub mod state;
 
@@ -68,10 +71,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let grpc_handle = start_grpc(app_state.clone(), grpc_addr).await?;
 
     // Start the HTTP server
-    let http_handle = start_http(app_state, http_addr).await?;
+    let http_handle = start_http(app_state.clone(), http_addr).await?;
+
+    // Start the metrics thread
+    let metrics_handle = start_metrics(app_state).await?;
 
     // Join both handles
-    futures::future::select(grpc_handle, http_handle).await;
+    extended_select::select(grpc_handle, http_handle, metrics_handle).await;
 
     info!("service stopped");
     Ok(())
@@ -90,5 +96,12 @@ async fn start_http(
     http_addr: SocketAddr,
 ) -> Result<JoinHandle<Result<(), HTTPServerError>>, Box<dyn std::error::Error>> {
     let handle = tokio::spawn(async move { http::run(http_addr, app_state).await });
+    Ok(handle)
+}
+
+async fn start_metrics(
+    app_state: AppState,
+) -> Result<JoinHandle<Result<(), MetricsError>>, Box<dyn std::error::Error>> {
+    let handle = tokio::spawn(async move { metrics::run(app_state).await });
     Ok(handle)
 }

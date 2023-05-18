@@ -15,7 +15,7 @@ pub async fn route(
 ) -> (StatusCode, Json<()>) {
     let email = data.email;
 
-    let data = registration::RegistrationData {
+    let data = registration::BasicRegistrationData {
         email,
         username: "".to_owned(),
         password: "".to_owned(),

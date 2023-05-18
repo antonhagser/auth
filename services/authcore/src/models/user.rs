@@ -7,6 +7,7 @@ use self::email_address::EmailAddressBuilder;
 use super::{
     error::ModelError,
     prisma::{self, user::Data, PrismaClient},
+    ModelValue,
 };
 
 pub use email_address::EmailAddress;
@@ -23,7 +24,7 @@ pub struct User {
     first_name: Option<String>,
     last_name: Option<String>,
 
-    email_address: Option<EmailAddress>,
+    email_address: ModelValue<EmailAddress>,
 
     external_users: Vec<ExternalUser>,
 
@@ -44,6 +45,13 @@ pub struct User {
 }
 
 impl User {
+    pub async fn exists<C>(prisma: &PrismaClient, email: C) -> Result<bool, ModelError>
+    where
+        C: Into<String>,
+    {
+        EmailAddress::exists(prisma, email).await
+    }
+
     pub fn builder<'a>(
         id_generator: &'a SnowflakeGenerator,
         prisma: &'a PrismaClient,
@@ -81,7 +89,7 @@ impl User {
         self.last_name.as_ref()
     }
 
-    pub fn email_address(&self) -> Option<&EmailAddress> {
+    pub fn email_address(&self) -> ModelValue<&EmailAddress> {
         self.email_address.as_ref()
     }
 
@@ -136,7 +144,7 @@ impl From<Data> for User {
             id: value.id.try_into().unwrap(),
             first_name: value.first_name,
             last_name: value.last_name,
-            email_address: None,
+            email_address: ModelValue::NotLoaded,
             external_users: vec![],
             password_enabled: value.password_enabled,
             basic_auth: None,
@@ -361,7 +369,7 @@ impl<'a> UserBuilder<'a> {
             application_id,
             first_name: self.first_name,
             last_name: self.last_name,
-            email_address: Some(result.0),
+            email_address: ModelValue::Some(result.0),
             basic_auth: result.1,
             user_metadata: result.2,
 
