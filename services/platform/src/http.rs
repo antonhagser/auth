@@ -10,13 +10,6 @@ use crate::{state::AppState, ServiceData, SERVICE_DATA};
 pub mod modules;
 pub mod response;
 
-#[utoipa::path(
-    get,
-    path = "/",
-    responses(
-        (status = 200, description = "service information", body = ServiceData)
-    )
-)]
 async fn root() -> Json<ServiceData> {
     Json(*SERVICE_DATA)
 }
@@ -36,34 +29,6 @@ pub enum HTTPServerError {
     ServerError(hyper::Error),
 }
 
-/// Builds the OpenAPI documentation and writes it to a file.
-///
-/// # Errors
-///
-/// Returns an `HTTPServerError::OpenAPIIOError` if there is an issue
-/// with building the OpenAPI documentation or writing it to a file.
-#[cfg(debug_assertions)]
-fn build_openapi() -> Result<(), HTTPServerError> {
-    use std::io::Write;
-    use utoipa::OpenApi;
-
-    // Build the OpenAPI documentation
-    #[derive(OpenApi)]
-    #[openapi(paths(root), components(schemas(ServiceData)))]
-    struct ApiDoc;
-
-    let doc = ApiDoc::openapi()
-        .to_pretty_json()
-        .expect("failed to serialize OpenAPI document");
-
-    std::fs::File::create("authcore.api.json")
-        .map_err(HTTPServerError::OpenAPIIOError)?
-        .write_all(doc.as_bytes())
-        .map_err(HTTPServerError::OpenAPIIOError)?;
-
-    Ok(())
-}
-
 /// Starts and runs the HTTP server on the given address with the provided state.
 ///
 /// # Arguments
@@ -76,15 +41,10 @@ fn build_openapi() -> Result<(), HTTPServerError> {
 /// Returns an `HTTPServerError::ServerError` if there is an issue
 /// within the Axum (HTTPServer).
 pub async fn run(addr: SocketAddr, state: AppState) -> Result<(), HTTPServerError> {
-    #[cfg(debug_assertions)]
-    {
-        build_openapi()?;
-    }
-
     let app = Router::new()
-        .route("/auth", get(root))
+        .route("/platform", get(root))
         .with_state(state.clone())
-        .nest("/auth", modules::router(state.clone()));
+        .nest("/platform", modules::router(state.clone()));
 
     tracing::debug!("http listening on {}", addr);
 

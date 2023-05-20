@@ -190,7 +190,7 @@ impl From<Data> for User {
             sessions: vec![],
             user_tokens: vec![],
             user_metadata: vec![],
-            application_id: value.application_id.try_into().unwrap(),
+            application_id: value.replicated_application_id.try_into().unwrap(),
         }
     }
 }
@@ -359,7 +359,7 @@ impl<'a> UserBuilder<'a> {
                     .user()
                     .create(
                         user_id.to_id_signed(),
-                        application_id.to_id_signed(),
+                        self.application_id.to_id_signed(),
                         user_create_params,
                     )
                     .exec()

@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 
+use crypto::extended_select;
 use grpc::GrpcServerError;
 use http::HTTPServerError;
 use metrics::MetricsError;
@@ -16,22 +17,21 @@ use utoipa::ToSchema;
 use crate::state::State;
 
 pub mod core;
-pub mod extended_select;
 pub mod grpc;
 pub mod http;
 pub mod metrics;
 pub mod models;
 pub mod state;
 
-#[derive(Clone, Copy, Serialize, ToSchema)]
-struct ServiceData {
-    service_name: &'static str,
-    service_version: &'static str,
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
+pub struct ServiceData {
+    name: &'static str,
+    version: &'static str,
 }
 
 static SERVICE_DATA: Lazy<ServiceData> = Lazy::new(|| ServiceData {
-    service_name: "AuthCore",
-    service_version: env!("CARGO_PKG_VERSION"),
+    name: "AuthCore",
+    version: env!("CARGO_PKG_VERSION"),
 });
 
 static DATABASE_URL: Lazy<String> =
@@ -50,8 +50,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     let id_generator = crypto::snowflake::SnowflakeGenerator::new(0, 0);
+    let app_state = State::new(prisma, id_generator, *SERVICE_DATA);
 
-    let app_state = State::new(prisma, id_generator);
     let app_state = Arc::new(app_state);
 
     // If we are running in debug mode, bind to localhost

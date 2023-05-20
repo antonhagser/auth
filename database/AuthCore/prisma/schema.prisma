@@ -32,10 +32,11 @@ model User {
     userMetadata UserMetadata[]
 
     // Cross service references
-    applicationID BigInt
+    replicatedApplication   ReplicatedApplication? @relation(fields: [replicatedApplicationId], references: [id])
+    replicatedApplicationId BigInt
 
-    @@unique([username, applicationID], name: "Unique_Username_ApplicationID")
-    @@index([firstName, lastName, applicationID])
+    @@unique([username, replicatedApplicationId], name: "Unique_Username_ApplicationID")
+    @@index([username, firstName, lastName, replicatedApplicationId])
 }
 
 model EmailAddress {
@@ -131,4 +132,29 @@ model UserMetadata {
     value String
 
     @@index([key])
+}
+
+// ReplicatedApplication is a cross service reference, it exists to avoid unnecessary requests across services.
+model ReplicatedApplication {
+    id BigInt @id @unique
+
+    applicationID BigInt @unique
+
+    User User[]
+
+    basicAuthEnabled Boolean          @default(true)
+    basicAuthConfig  BasicAuthConfig?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
+
+model BasicAuthConfig {
+    id BigInt @id @unique
+
+    application   ReplicatedApplication @relation(fields: [applicationID], references: [id], onDelete: Cascade)
+    applicationID BigInt                @unique
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
 }

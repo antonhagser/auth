@@ -884,6 +884,7 @@ dependencies = [
  "chrono",
  "data-encoding",
  "failure",
+ "futures",
  "hmac",
  "idna 0.3.0",
  "jsonwebtoken",
@@ -3552,10 +3553,22 @@ checksum = "26072860ba924cbfa98ea39c8c19b4dd6a4a25423dbdf219c1eca91aa0cf6964"
 name = "platform"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "axum",
+ "console-subscriber",
  "crypto",
+ "hyper",
+ "once_cell",
  "prisma-client-rust",
+ "rand 0.8.5",
  "serde",
  "serde_json",
+ "thiserror",
+ "tokio",
+ "tonic 0.9.2",
+ "tonic-build",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

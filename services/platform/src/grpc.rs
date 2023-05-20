@@ -5,13 +5,6 @@ use std::net::SocketAddr;
 
 use crate::AppState;
 
-mod platform;
-
-/// Tonic-generated gRPC bindings
-pub mod authcore {
-    tonic::include_proto!("authcore");
-}
-
 /// GrpcServerError enumerates the possible errors that can occur
 /// when running the gRPC server. As the current implementation is a placeholder,
 /// there are no variants defined.
@@ -29,16 +22,18 @@ pub enum GrpcServerError {}
 ///
 /// Currently, this function cannot return any errors as the implementation
 /// is a placeholder.
-pub async fn run(addr: SocketAddr, state: AppState) -> Result<(), GrpcServerError> {
-    let platform = platform::Platform::new(state);
-    let svc_platform = authcore::auth_core_platform_server::AuthCorePlatformServer::new(platform);
-
+pub async fn run(addr: SocketAddr, _state: AppState) -> Result<(), GrpcServerError> {
     tracing::debug!("grpc listening on {}", addr);
-    tonic::transport::Server::builder()
-        .add_service(svc_platform)
-        .serve(addr)
-        .await
-        .unwrap();
+    // tonic::transport::Server::builder()
+    //     .add_service(HelloServer::new(HelloService))
+    //     .serve(addr)
+    //     .await
+    //     .unwrap();
+
+    #[allow(clippy::empty_loop)]
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(50)).await;
+    }
 
     #[allow(unreachable_code)]
     Ok(())
