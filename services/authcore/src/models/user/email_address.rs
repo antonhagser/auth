@@ -93,6 +93,7 @@ impl<'a> EmailAddressBuilder<'a> {
         self,
         prisma: &PrismaClient,
         user_id: Snowflake,
+        application_id: Snowflake,
     ) -> Result<EmailAddress, QueryError> {
         let email_address = self.email_address;
         let user_id = user_id;
@@ -103,6 +104,7 @@ impl<'a> EmailAddressBuilder<'a> {
                 self.id_generator.next_snowflake().unwrap().to_id_signed(),
                 prisma::user::id::equals(user_id.to_id_signed()),
                 email_address.email_address().to_owned(),
+                application_id.to_id_signed(),
                 vec![],
             )
             .exec()

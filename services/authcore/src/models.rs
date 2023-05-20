@@ -9,6 +9,9 @@ pub use prisma::PrismaClient;
 pub mod error;
 pub mod user;
 
+/// A model value that might not exist.
+///
+/// This is used to represent a value that might not exist or has not been loaded.
 #[allow(clippy::derived_hash_with_manual_eq)]
 #[derive(Copy, PartialOrd, Eq, Ord, Debug, Hash)] //  PartialOrd, Eq, Ord
 pub enum ModelValue<T> {

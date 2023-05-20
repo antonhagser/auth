@@ -1,14 +1,14 @@
 //! This module defines an HTTP server using the Axum framework
 //! and handles OpenAPI documentation generation.
 
-use std::{io::Write, net::SocketAddr};
+use std::net::SocketAddr;
 
 use axum::{routing::get, Json, Router};
-use utoipa::OpenApi;
 
 use crate::{state::AppState, ServiceData, SERVICE_DATA};
 
 pub mod modules;
+pub mod response;
 
 #[utoipa::path(
     get,
@@ -42,7 +42,11 @@ pub enum HTTPServerError {
 ///
 /// Returns an `HTTPServerError::OpenAPIIOError` if there is an issue
 /// with building the OpenAPI documentation or writing it to a file.
+#[cfg(debug_assertions)]
 fn build_openapi() -> Result<(), HTTPServerError> {
+    use std::io::Write;
+    use utoipa::OpenApi;
+
     // Build the OpenAPI documentation
     #[derive(OpenApi)]
     #[openapi(paths(root), components(schemas(ServiceData)))]

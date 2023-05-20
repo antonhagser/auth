@@ -7,6 +7,10 @@ use crypto::snowflake::SnowflakeGenerator;
 
 use crate::models::PrismaClient;
 
+pub use config::{Config, CONFIG};
+
+mod config;
+
 /// `State` represents the server's global state.
 #[derive(Debug)]
 pub struct State {
@@ -28,6 +32,10 @@ impl State {
 
     pub fn id_generator(&self) -> &SnowflakeGenerator {
         &self.id_generator
+    }
+
+    pub fn config(&self) -> &Config {
+        &CONFIG
     }
 }
 

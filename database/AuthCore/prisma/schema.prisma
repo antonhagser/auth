@@ -11,6 +11,7 @@ generator client {
 model User {
     id BigInt @id @unique
 
+    username  String?
     firstName String?
     lastName  String?
 
@@ -33,6 +34,7 @@ model User {
     // Cross service references
     applicationID BigInt
 
+    @@unique([username, applicationID], name: "Unique_Username_ApplicationID")
     @@index([firstName, lastName, applicationID])
 }
 
@@ -42,7 +44,7 @@ model EmailAddress {
     user   User   @relation(fields: [userID], references: [id], onDelete: Cascade)
     userID BigInt @unique
 
-    email_address String @unique
+    email_address String
 
     verified   Boolean   @default(false)
     verifiedAt DateTime?
@@ -51,7 +53,9 @@ model EmailAddress {
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
-    @@index([email_address])
+    applicationID BigInt
+
+    @@index([email_address, applicationID], name: "Unique_EmailAddress_ApplicationID")
 }
 
 model ExternalUser {

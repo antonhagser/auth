@@ -5,7 +5,8 @@ use crate::{
     state::AppState,
 };
 
-mod password;
+pub mod password;
+pub mod username;
 
 #[derive(Debug, Error)]
 pub enum BasicRegistrationError {
@@ -14,11 +15,7 @@ pub enum BasicRegistrationError {
     #[error("email address already exists")]
     EmailAddressAlreadyExists,
     #[error("invalid password")]
-    InvalidPassword,
-    #[error("invalid phone number")]
-    InvalidPhoneNumber,
-    #[error("phone number already exists")]
-    PhoneNumberAlreadyExists,
+    InvalidPassword(Vec<password::PasswordValidationError>),
     #[error("invalid username")]
     InvalidUsername,
     #[error("username already exists")]
@@ -30,9 +27,8 @@ pub enum BasicRegistrationError {
 
 pub struct BasicRegistrationData {
     pub email: String,
-    pub username: String,
+    pub username: Option<String>,
     pub password: String,
-    pub phone_number: String,
 
     pub application_id: u64,
 }
@@ -55,7 +51,7 @@ pub async fn with_basic_auth(
     }
 
     // check if email already exists
-    let res = User::exists(state.prisma(), &email).await;
+    let res = User::exists(state.prisma(), crate::models::user::ExistsOr::Email(email)).await;
     match res {
         Err(ModelError::DatabaseError(e)) => return Err(BasicRegistrationError::QueryError(e)),
         Ok(true) => return Err(BasicRegistrationError::EmailAddressAlreadyExists),
@@ -63,8 +59,27 @@ pub async fn with_basic_auth(
     }
 
     // validate password
-    if !password::validate_password(&data.password) {
-        return Err(BasicRegistrationError::InvalidPassword);
+    if let Err(e) =
+        password::validate_password(&data.password, state.config().default_password_requirements)
+    {
+        return Err(BasicRegistrationError::InvalidPassword(e));
+    }
+
+    // if username is provided, validate it
+    if let Some(username) = data.username {
+        let _ = username::validate_username(&username);
+
+        // check if username already exists
+        let res = User::exists(
+            state.prisma(),
+            crate::models::user::ExistsOr::Username(username),
+        )
+        .await;
+        match res {
+            Err(ModelError::DatabaseError(e)) => return Err(BasicRegistrationError::QueryError(e)),
+            Ok(true) => return Err(BasicRegistrationError::UsernameAlreadyExists),
+            _ => (),
+        }
     }
 
     Ok(())

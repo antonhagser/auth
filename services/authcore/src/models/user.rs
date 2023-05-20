@@ -21,6 +21,7 @@ pub struct User {
     id: Snowflake,
 
     // Todo: Replace Option with a new type which implements a enum None (exists but not loaded), NotSet (not set), Some (set to a value)
+    username: Option<String>,
     first_name: Option<String>,
     last_name: Option<String>,
 
@@ -44,12 +45,40 @@ pub struct User {
     application_id: Snowflake,
 }
 
+#[derive(Debug, Clone)]
+pub enum ExistsOr<C> {
+    Email(C),
+    Username(C),
+}
+
 impl User {
-    pub async fn exists<C>(prisma: &PrismaClient, email: C) -> Result<bool, ModelError>
+    pub async fn exists<C>(
+        prisma: &PrismaClient,
+        email_or_username: ExistsOr<C>,
+    ) -> Result<bool, ModelError>
     where
         C: Into<String>,
     {
-        EmailAddress::exists(prisma, email).await
+        match email_or_username {
+            ExistsOr::Email(email) => EmailAddress::exists(prisma, email).await,
+            ExistsOr::Username(username) => User::exists_by_username(prisma, username).await,
+        }
+    }
+
+    pub async fn exists_by_username<C>(
+        prisma: &PrismaClient,
+        username: C,
+    ) -> Result<bool, ModelError>
+    where
+        C: Into<String>,
+    {
+        let username = username.into();
+        Ok(prisma
+            .user()
+            .find_first(vec![prisma::user::username::equals(Some(username))])
+            .exec()
+            .await?
+            .is_some())
     }
 
     pub fn builder<'a>(
@@ -65,6 +94,7 @@ impl User {
             id_generator,
             prisma,
 
+            username: None,
             first_name: None,
             last_name: None,
             email_builder,
@@ -79,6 +109,10 @@ impl User {
 
     pub fn id(&self) -> Snowflake {
         self.id
+    }
+
+    pub fn username(&self) -> Option<&String> {
+        self.username.as_ref()
     }
 
     pub fn first_name(&self) -> Option<&String> {
@@ -142,6 +176,7 @@ impl From<Data> for User {
     fn from(value: Data) -> Self {
         User {
             id: value.id.try_into().unwrap(),
+            username: value.username,
             first_name: value.first_name,
             last_name: value.last_name,
             email_address: ModelValue::NotLoaded,
@@ -233,6 +268,7 @@ pub struct UserBuilder<'a> {
     id_generator: &'a SnowflakeGenerator,
     prisma: &'a PrismaClient,
 
+    username: Option<String>,
     first_name: Option<String>,
     last_name: Option<String>,
     email_builder: EmailAddressBuilder<'a>,
@@ -245,6 +281,11 @@ pub struct UserBuilder<'a> {
 }
 
 impl<'a> UserBuilder<'a> {
+    pub fn username(mut self, username: String) -> Self {
+        self.username = Some(username);
+        self
+    }
+
     pub fn first_name(mut self, first_name: String) -> Self {
         self.first_name = Some(first_name);
         self
@@ -325,7 +366,10 @@ impl<'a> UserBuilder<'a> {
                     .await?;
 
                 // Insert and build email address
-                let email_address = self.email_builder.build(&client, user_id).await?;
+                let email_address = self
+                    .email_builder
+                    .build(&client, user_id, self.application_id)
+                    .await?;
 
                 let basic_auth = if let Some(basic_auth) = self.basic_auth {
                     client
@@ -367,6 +411,7 @@ impl<'a> UserBuilder<'a> {
         let user = User {
             id: user_id,
             application_id,
+            username: self.username,
             first_name: self.first_name,
             last_name: self.last_name,
             email_address: ModelValue::Some(result.0),
