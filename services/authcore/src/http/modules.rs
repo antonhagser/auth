@@ -6,7 +6,7 @@
 
 use crate::state::AppState;
 
-pub mod basic_auth;
+pub mod basic;
 
 /// Verification submodule for handling user verification.
 pub mod verification;
@@ -15,6 +15,7 @@ pub mod verification;
 pub fn router(state: AppState) -> axum::Router {
     axum::Router::new()
         .with_state(state.clone())
-        .nest("/", basic_auth::router(state.clone()))
-        .nest("/", verification::router(state))
+        .nest("/basic", basic::router(state.clone()))
+        .nest("/verify", verification::router(state))
+    // .nest("/sso", sso::router(state))
 }

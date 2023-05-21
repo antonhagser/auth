@@ -1,4 +1,4 @@
-use crate::core::registration::basic_auth::password::PasswordRequirements;
+use crypto::input::password::PasswordRequirements;
 
 pub static CONFIG: once_cell::sync::Lazy<Config> = once_cell::sync::Lazy::new(Config::default);
 

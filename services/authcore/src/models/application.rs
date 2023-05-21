@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use crypto::snowflake::Snowflake;
+use crypto::{input::password::PasswordRequirements, snowflake::Snowflake};
 use prisma_client_rust::QueryError;
 
 use super::{error::ModelError, ModelValue, PrismaClient};
@@ -215,6 +215,21 @@ impl BasicAuthConfig {
 
     pub fn zxcvbn_minimum_score(&self) -> u8 {
         self.zxcvbn_minimum_score
+    }
+
+    pub fn as_password_requirements_config(&self) -> PasswordRequirements {
+        PasswordRequirements {
+            min_length: self.min_password_length,
+            max_length: self.max_password_length,
+
+            enable_strict_requirements: self.enable_strict_password,
+            min_uppercase: self.min_uppercase,
+            min_lowercase: self.min_lowercase,
+            min_numbers: self.min_numbers,
+            min_symbols: self.min_symbols,
+
+            min_zxcvbn_score: self.zxcvbn_minimum_score,
+        }
     }
 }
 

@@ -39,11 +39,11 @@ impl EmailAddress {
         }
     }
 
-    pub async fn exists<C>(
+    pub async fn find<C>(
         prisma: &PrismaClient,
         email: C,
         application_id: Snowflake,
-    ) -> Result<bool, ModelError>
+    ) -> Result<EmailAddress, ModelError>
     where
         C: Into<String>,
     {
@@ -58,7 +58,10 @@ impl EmailAddress {
             .exec()
             .await?;
 
-        Ok(email_address.is_some())
+        match email_address {
+            Some(email_address) => Ok(email_address.into()),
+            None => Err(ModelError::RecordNotFound),
+        }
     }
 
     pub fn id(&self) -> Snowflake {

@@ -13,6 +13,9 @@ pub enum CryptoError {
 
     #[error("Hash Error")]
     HashError(argon2::password_hash::Error),
+
+    #[error("not matching")]
+    NotMatching,
 }
 
 /// Hashes and salts a password using Argon2, and returns the resulting hash as a PHC-formatted string.
@@ -45,24 +48,13 @@ pub fn hash_and_salt_password(password: &str) -> Result<String, CryptoError> {
     Ok(password_hash)
 }
 
-/// Verifies a password against a given password hash. Returns true if the password matches the hash.
+/// Verifies a password against a given password hash. Returns () if the password matches the hash.
 ///
 /// # Arguments
 ///
 /// * `password` - The password to be verified.
 /// * `password_hash` - The PHC-formatted password hash string to verify against.
-///
-/// # Example
-///
-/// ```
-/// use crypto::password::verify_password;
-/// use crypto::password::hash_and_salt_password;
-///
-/// let password = "password";
-/// let password_hash = hash_and_salt_password(password).unwrap();
-/// assert!(verify_password(password, &password_hash).unwrap());
-/// ```
-pub fn verify_password(password: &str, password_hash: &str) -> Result<bool, CryptoError> {
+pub fn verify_password(password: &str, password_hash: &str) -> Result<(), CryptoError> {
     // Default argon configuration
     let argon2 = Argon2::default();
 
@@ -71,6 +63,9 @@ pub fn verify_password(password: &str, password_hash: &str) -> Result<bool, Cryp
 
     // Verify password
     let is_valid = argon2.verify_password(password.as_bytes(), &hash).is_ok();
+    if !is_valid {
+        return Err(CryptoError::NotMatching);
+    }
 
-    Ok(is_valid)
+    Ok(())
 }

@@ -27,7 +27,7 @@
 //! let password = "my_password";
 //! let password_hash = hash_and_salt_password(password).unwrap();
 //!
-//! assert!(verify_password(password, &password_hash).unwrap());
+//! assert!(verify_password(password, &password_hash).is_ok());
 //! ```
 //!
 //! ## TOTP Generation and Verification

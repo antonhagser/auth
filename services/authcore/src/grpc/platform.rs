@@ -50,8 +50,13 @@ impl super::authcore::auth_core_platform_server::AuthCorePlatform for Platform {
         )
         .await
         {
-            error!("failed to create application: {}", e);
+            // Check if prisma error is: already exists
+            if e.is_prisma_error::<prisma_client_rust::prisma_errors::query_engine::UniqueKeyViolation>()
+            {
+                return Err(tonic::Status::already_exists("application already exists"));
+            }
 
+            error!("failed to create application: {}", e);
             return Err(tonic::Status::internal("internal server error"));
         }
 

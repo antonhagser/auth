@@ -51,41 +51,83 @@ pub enum ExistsOr<C> {
     Username(C),
 }
 
+pub enum UserWith {
+    EmailAddress,
+    BasicAuth,
+}
+
 impl User {
-    pub async fn exists<C>(
+    pub async fn find_by_email<C>(
         prisma: &PrismaClient,
-        email_or_username: ExistsOr<C>,
+        email: C,
         application_id: Snowflake,
-    ) -> Result<bool, ModelError>
+        user_with: Vec<UserWith>,
+    ) -> Result<User, ModelError>
     where
         C: Into<String>,
     {
-        match email_or_username {
-            ExistsOr::Email(email) => EmailAddress::exists(prisma, email, application_id).await,
-            ExistsOr::Username(username) => {
-                User::exists_by_username(prisma, username, application_id).await
+        let mut user_fetch = super::prisma::email_address::user::fetch();
+        for with in user_with {
+            user_fetch = match with {
+                UserWith::EmailAddress => user_fetch,
+                UserWith::BasicAuth => user_fetch.with(super::prisma::user::basic_auth::fetch()),
+            };
+        }
+
+        let email_address = prisma
+            .email_address()
+            .find_first(vec![
+                super::prisma::email_address::email_address::equals(email.into()),
+                super::prisma::email_address::replicated_application_id::equals(
+                    application_id.to_id_signed(),
+                ),
+            ])
+            .with(user_fetch)
+            .exec()
+            .await
+            .map_err(ModelError::DatabaseError)?;
+
+        match email_address {
+            Some(mut email_address) => {
+                let user = email_address
+                    .user
+                    .take()
+                    .ok_or(ModelError::RecordNotFound)?;
+                let mut user: User = (*user).into();
+
+                let email_address: EmailAddress = email_address.into();
+                user.email_address = ModelValue::Loaded(email_address);
+                Ok(user)
             }
+            None => Err(ModelError::RecordNotFound),
         }
     }
 
-    pub async fn exists_by_username<C>(
+    pub async fn find_by_username<C>(
         prisma: &PrismaClient,
         username: C,
         application_id: Snowflake,
-    ) -> Result<bool, ModelError>
+        user_with: Vec<UserWith>,
+    ) -> Result<User, ModelError>
     where
         C: Into<String>,
     {
-        let username = username.into();
-        Ok(prisma
-            .user()
-            .find_first(vec![
-                prisma::user::username::equals(Some(username)),
-                prisma::user::replicated_application_id::equals(application_id.to_id_signed()),
-            ])
-            .exec()
-            .await?
-            .is_some())
+        let mut find = prisma.user().find_first(vec![
+            prisma::user::username::equals(Some(username.into())),
+            prisma::user::replicated_application_id::equals(application_id.to_id_signed()),
+        ]);
+
+        for with in user_with {
+            find = match with {
+                UserWith::EmailAddress => find.with(prisma::user::email_address::fetch()),
+                UserWith::BasicAuth => find.with(prisma::user::basic_auth::fetch()),
+            };
+        }
+
+        match find.exec().await? {
+            Some(data) => Ok(User::from(data)),
+            None => Err(ModelError::RecordNotFound),
+        }
     }
 
     pub fn builder<'a>(

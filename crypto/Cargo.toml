@@ -23,7 +23,9 @@ idna = "0.3.0"
 lazy_static = "1.4.0"
 regex = "1.8.1"
 futures = "0.3.28"
+zxcvbn = "2.2.2"
+validator = { version = "0.16.0", features = ["derive"] }
 
 [dev-dependencies]
 rand = "0.8.5"
-rsa = "0.9.1"
+rsa = "0.9.0"

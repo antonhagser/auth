@@ -81,10 +81,16 @@ pub async fn run(addr: SocketAddr, state: AppState) -> Result<(), HTTPServerErro
         build_openapi()?;
     }
 
+    // Finished API (running behind ISTIO would look something like this)
+    //
+    // For example:
+    //
+    //  localhost:8080/api/v0/auth/basic/register
+    //  localhost:8080/api/v0/auth/sso/register
     let app = Router::new()
-        .route("/auth", get(root))
+        .route("/", get(root))
         .with_state(state.clone())
-        .nest("/auth", modules::router(state.clone()));
+        .nest("/", modules::router(state.clone()));
 
     tracing::debug!("http listening on {}", addr);
 

@@ -901,6 +901,8 @@ dependencies = [
  "sha1",
  "thiserror",
  "tokio",
+ "validator",
+ "zxcvbn",
 ]
 
 [[package]]

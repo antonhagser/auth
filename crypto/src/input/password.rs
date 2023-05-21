@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::error;
 use validator::{Validate, ValidationErrors};
 
 /// Provide password requirements configuration to organizations (e.g. min length, max length, etc.)
@@ -8,20 +7,27 @@ use validator::{Validate, ValidationErrors};
 /// Please do not recommend organizations to use password requirements that are too strict. It's ridiculous and annoying.
 #[derive(Debug, Clone, Copy, Validate, Deserialize, PartialEq, Eq)]
 pub struct PasswordRequirements {
+    /// Minimum password length
+    #[validate(range(min = 8, max = 128))]
+    pub min_length: u8,
+    /// Maximum password length
+    #[validate(range(min = 8, max = 128))]
+    pub max_length: u8,
+
     /// Enable strict requirements. If enabled, the password must contain at least one lowercase letter, one uppercase letter, one number, and one symbol.
-    pub(crate) enable_strict_requirements: bool,
-    #[validate(range(min = 8, max = 128))]
-    pub(crate) min_length: u8,
-    #[validate(range(min = 8, max = 128))]
-    pub(crate) max_length: u8,
-    pub(crate) min_lowercase: u8,
-    pub(crate) min_uppercase: u8,
-    pub(crate) min_numbers: u8,
-    pub(crate) min_symbols: u8,
+    pub enable_strict_requirements: bool,
+    /// Minimum lowercase letters
+    pub min_lowercase: u8,
+    /// Minimum uppercase letters
+    pub min_uppercase: u8,
+    /// Minimum numbers
+    pub min_numbers: u8,
+    /// Minimum symbols
+    pub min_symbols: u8,
 
     /// Minimum zxcvbn score required for password
     #[validate(range(min = 0, max = 4))]
-    pub(crate) min_zxcvbn_score: u8,
+    pub min_zxcvbn_score: u8,
 }
 
 impl Default for PasswordRequirements {
@@ -35,7 +41,7 @@ impl Default for PasswordRequirements {
             min_uppercase: 0,
             min_numbers: 0,
             min_symbols: 0,
-            min_zxcvbn_score: 2,
+            min_zxcvbn_score: 3,
         }
     }
 }
@@ -62,14 +68,25 @@ pub enum PasswordValidationError {
     InvalidPasswordRequirements(#[from] ValidationErrors),
 }
 
+/// Validates a password according to the provided requirements.
+///
+/// This function checks if the given password meets the requirements specified in the `requirements` parameter.
+/// It also checks if the password contains any of the strings provided in the `user_inputs` parameter, which
+/// might include things like the user's username or email address.
+///
+/// # Arguments
+///
+/// * `requirements` - A `PasswordRequirements` object that specifies the rules the password must follow.
+/// * `password` - A string slice that contains the password to validate.
+/// * `user_inputs` - A vector of strings that the password should not contain. (ex. email)
 pub fn validate_password(
-    requirements: PasswordRequirements,
     password: &str,
-    user_inputs: Vec<String>,
+    user_inputs: &[&str],
+    check_strength: bool,
+    requirements: PasswordRequirements,
 ) -> Result<(), Vec<PasswordValidationError>> {
     // validate requirements
     if let Err(e) = requirements.validate() {
-        error!("invalid password requirements: {}", e);
         return Err(vec![PasswordValidationError::InvalidPasswordRequirements(
             e,
         )]);
@@ -153,12 +170,14 @@ pub fn validate_password(
         }
     }
 
-    // check against dropbox zxcvbn
-    let user_inputs_str: Vec<&str> = user_inputs.iter().map(|s| s.as_str()).collect();
-    if let Ok(r) = zxcvbn::zxcvbn(password, &user_inputs_str) {
-        if r.score() < requirements.min_zxcvbn_score {
-            valid_password = false;
-            errors.push(PasswordValidationError::NotStrongEnough);
+    // ! check against dropbox zxcvbn
+    // ! Currently locked to score 2 due to inaccuracy of zxcvbn in rust compared to the typescript version (Is WASM an option?)
+    if check_strength {
+        if let Ok(r) = zxcvbn::zxcvbn(password, user_inputs) {
+            if r.score() < 2 {
+                valid_password = false;
+                errors.push(PasswordValidationError::NotStrongEnough);
+            }
         }
     }
 

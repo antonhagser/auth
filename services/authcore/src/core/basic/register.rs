@@ -1,26 +1,25 @@
-use crypto::snowflake::Snowflake;
+use crypto::{
+    input::{password, username},
+    snowflake::Snowflake,
+};
 use thiserror::Error;
 use tracing::info;
 
 use crate::{
-    core::registration::basic_auth::password::PasswordRequirements,
     models::{error::ModelError, user::User, ModelValue},
     state::AppState,
 };
 
-pub mod password;
-pub mod username;
-
 #[derive(Debug, Error)]
 pub enum BasicRegistrationError {
     #[error("invalid email address")]
-    InvalidEmailAddress,
+    InvalidEmailAddressFormat,
     #[error("email address already exists")]
     EmailAddressAlreadyExists,
     #[error("invalid password")]
     InvalidPassword(Vec<password::PasswordValidationError>),
     #[error("invalid username")]
-    InvalidUsername,
+    InvalidUsernameFormat,
     #[error("username already exists")]
     UsernameAlreadyExists,
 
@@ -58,39 +57,33 @@ pub async fn with_basic_auth(
 ) -> Result<(), BasicRegistrationError> {
     // validate email
     if !crypto::input::email::validate_email(&data.email) {
-        return Err(BasicRegistrationError::InvalidEmailAddress);
+        return Err(BasicRegistrationError::InvalidEmailAddressFormat);
     }
 
     // check if email already exists
-    let res = User::exists(
-        state.prisma(),
-        crate::models::user::ExistsOr::Email(&data.email),
-        data.application_id,
-    )
-    .await;
-    match res {
-        Err(ModelError::DatabaseError(e)) => return Err(BasicRegistrationError::QueryError(e)),
-        Ok(true) => return Err(BasicRegistrationError::EmailAddressAlreadyExists),
-        _ => (),
+    match User::find_by_email(state.prisma(), &data.email, data.application_id, vec![]).await {
+        Ok(_) => return Err(BasicRegistrationError::EmailAddressAlreadyExists),
+        Err(ModelError::RecordNotFound) => (),
+        _ => return Err(BasicRegistrationError::Unknown),
     }
 
     // validate password
-    let mut user_input = Vec::new();
-    user_input.push(data.email.clone());
+    let mut user_inputs = Vec::new();
+    user_inputs.push(data.email.clone());
     if let Some(username) = &data.username {
-        user_input.push(username.clone());
+        user_inputs.push(username.clone());
     }
 
     if let Some(first_name) = &data.first_name {
-        user_input.push(first_name.clone());
+        user_inputs.push(first_name.clone());
     }
 
     if let Some(last_name) = &data.last_name {
-        user_input.push(last_name.clone());
+        user_inputs.push(last_name.clone());
     }
 
     // Get the password requirements from the application
-    // TODO: Introduce caching?
+    // TODO: Introduce caching? (big problem with cache invalidation, maybe we're fine with a bit of a delay?)
     let application =
         match crate::models::application::ReplicatedApplication::find_by_id_with_config(
             state.prisma(),
@@ -102,25 +95,23 @@ pub async fn with_basic_auth(
             Err(_) => return Err(BasicRegistrationError::ApplicationDoesNotExist),
         };
 
-    // If config is not found, use the default config
+    // If password requirements config is not found, use the default config
     let password_requirements = match application.basic_auth_config() {
-        ModelValue::Loaded(config) => PasswordRequirements {
-            enable_strict_requirements: config.enable_strict_password(),
-            min_length: config.min_password_length(),
-            max_length: config.max_password_length(),
-            min_lowercase: config.min_lowercase(),
-            min_uppercase: config.min_uppercase(),
-            min_numbers: config.min_numbers(),
-            min_symbols: config.min_symbols(),
-            min_zxcvbn_score: config.zxcvbn_minimum_score(),
-        },
+        ModelValue::Loaded(basic_auth_config) => {
+            basic_auth_config.as_password_requirements_config()
+        }
         _ => state.config().default_password_requirements(),
     };
 
-    if let Err(e) = password::validate_password(password_requirements, &data.password, user_input) {
+    // Validate the password
+    let user_inputs: Vec<&str> = user_inputs.iter().map(|s| s.as_str()).collect();
+    if let Err(e) =
+        password::validate_password(&data.password, &user_inputs, true, password_requirements)
+    {
         return Err(BasicRegistrationError::InvalidPassword(e));
     }
 
+    // create user builder
     let mut user = User::builder(
         state.id_generator(),
         state.prisma(),
@@ -130,19 +121,15 @@ pub async fn with_basic_auth(
 
     // if username is provided, validate it and add it to builder (if not already taken)
     if let Some(username) = data.username.take() {
-        let _ = username::validate_username(&username);
+        if let Err(_e) = username::validate_username(&username) {
+            return Err(BasicRegistrationError::InvalidUsernameFormat);
+        }
 
         // check if username already exists
-        let res = User::exists(
-            state.prisma(),
-            crate::models::user::ExistsOr::Username(&username),
-            data.application_id,
-        )
-        .await;
-        match res {
-            Err(ModelError::DatabaseError(e)) => return Err(BasicRegistrationError::QueryError(e)),
-            Ok(true) => return Err(BasicRegistrationError::UsernameAlreadyExists),
-            _ => (),
+        match User::find_by_username(state.prisma(), &username, data.application_id, vec![]).await {
+            Ok(_) => return Err(BasicRegistrationError::UsernameAlreadyExists),
+            Err(ModelError::RecordNotFound) => (),
+            _ => return Err(BasicRegistrationError::Unknown),
         }
 
         user.username(username);

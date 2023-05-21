@@ -1,6 +1,6 @@
 #[rustfmt::skip]
 #[allow(unused_imports, dead_code, clippy::all)]
-mod prisma;
+pub mod prisma;
 
 #[rustfmt::skip]
 #[allow(unused_imports, dead_code, clippy::all)]
@@ -29,12 +29,20 @@ impl<T> ModelValue<T> {
         matches!(*self, ModelValue::Loaded(_))
     }
 
-    pub const fn is_none(&self) -> bool {
+    pub const fn is_not_loaded(&self) -> bool {
         matches!(*self, ModelValue::NotLoaded)
     }
 
     pub const fn is_not_set(&self) -> bool {
         matches!(*self, ModelValue::NotSet)
+    }
+
+    pub fn unwrap(self) -> T {
+        match self {
+            ModelValue::Loaded(x) => x,
+            ModelValue::NotLoaded => panic!("called `ModelValue::unwrap()` on a `NotLoaded` value"),
+            ModelValue::NotSet => panic!("called `ModelValue::unwrap()` on a `NotSet` value"),
+        }
     }
 
     pub const fn as_ref(&self) -> ModelValue<&T> {
