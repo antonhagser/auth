@@ -4,7 +4,7 @@ pub static CONFIG: once_cell::sync::Lazy<Config> = once_cell::sync::Lazy::new(Co
 
 #[derive(Debug, Default)]
 pub struct Config {
-    pub default_password_requirements: PasswordRequirements,
+    default_password_requirements: PasswordRequirements,
 }
 
 impl Config {
@@ -16,5 +16,9 @@ impl Config {
 
     pub fn set_default_password_requirements(&mut self, requirements: PasswordRequirements) {
         self.default_password_requirements = requirements;
+    }
+
+    pub fn default_password_requirements(&self) -> PasswordRequirements {
+        self.default_password_requirements
     }
 }

@@ -22,9 +22,7 @@ Move parts such as token validation out of AuthCore into an Edge Service. While 
 
 ### Platform Service
 
-The dashboard is the main interface for the platform. It is an application that allows administrators to manage users, clients, and other settings.
-
-The dashboard communicates with the authentication service to perform actions such as managing users, applications and organizations.
+The platform service is responsible for managing the platform. It is used by the dashboard to manage the platform. Data such as organizations, and applications are stored in the platform service.
 
 #### Features
 

@@ -6,18 +6,22 @@ use validator::{Validate, ValidationErrors};
 /// Provide password requirements configuration to organizations (e.g. min length, max length, etc.)
 ///
 /// Please do not recommend organizations to use password requirements that are too strict. It's ridiculous and annoying.
-#[derive(Debug, Clone, Copy, Validate, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Validate, Deserialize, PartialEq, Eq)]
 pub struct PasswordRequirements {
     /// Enable strict requirements. If enabled, the password must contain at least one lowercase letter, one uppercase letter, one number, and one symbol.
-    enable_strict_requirements: bool,
+    pub(crate) enable_strict_requirements: bool,
     #[validate(range(min = 8, max = 128))]
-    min_length: usize,
+    pub(crate) min_length: u8,
     #[validate(range(min = 8, max = 128))]
-    max_length: usize,
-    min_lowercase: usize,
-    min_uppercase: usize,
-    min_numbers: usize,
-    min_symbols: usize,
+    pub(crate) max_length: u8,
+    pub(crate) min_lowercase: u8,
+    pub(crate) min_uppercase: u8,
+    pub(crate) min_numbers: u8,
+    pub(crate) min_symbols: u8,
+
+    /// Minimum zxcvbn score required for password
+    #[validate(range(min = 0, max = 4))]
+    pub(crate) min_zxcvbn_score: u8,
 }
 
 impl Default for PasswordRequirements {
@@ -31,6 +35,7 @@ impl Default for PasswordRequirements {
             min_uppercase: 0,
             min_numbers: 0,
             min_symbols: 0,
+            min_zxcvbn_score: 2,
         }
     }
 }
@@ -75,20 +80,20 @@ pub fn validate_password(
     let mut errors = Vec::new();
 
     // Check against min length
-    if password.len() < requirements.min_length {
+    if password.len() < requirements.min_length as usize {
         valid_password = false;
         errors.push(PasswordValidationError::MinLength(
             password.len(),
-            requirements.min_length,
+            requirements.min_length as usize,
         ));
     }
 
     // Check against max length
-    if password.len() > requirements.max_length {
+    if password.len() > requirements.max_length as usize {
         valid_password = false;
         errors.push(PasswordValidationError::MaxLength(
             password.len(),
-            requirements.max_length,
+            requirements.max_length as usize,
         ));
     }
 
@@ -112,38 +117,38 @@ pub fn validate_password(
         }
 
         // Check against lowercase
-        if lowercase_count < requirements.min_lowercase {
+        if lowercase_count < requirements.min_lowercase as usize {
             valid_password = false;
             errors.push(PasswordValidationError::LowercaseCount(
                 lowercase_count,
-                requirements.min_lowercase,
+                requirements.min_lowercase as usize,
             ));
         }
 
         // Check against uppercase
-        if uppercase_count < requirements.min_uppercase {
+        if uppercase_count < requirements.min_uppercase as usize {
             valid_password = false;
             errors.push(PasswordValidationError::UppercaseCount(
                 uppercase_count,
-                requirements.min_uppercase,
+                requirements.min_uppercase as usize,
             ));
         }
 
         // Check against numbers
-        if number_count < requirements.min_numbers {
+        if number_count < requirements.min_numbers as usize {
             valid_password = false;
             errors.push(PasswordValidationError::NumberCount(
                 number_count,
-                requirements.min_numbers,
+                requirements.min_numbers as usize,
             ));
         }
 
         // Check against symbols
-        if symbol_count < requirements.min_symbols {
+        if symbol_count < requirements.min_symbols as usize {
             valid_password = false;
             errors.push(PasswordValidationError::SymbolCount(
                 symbol_count,
-                requirements.min_symbols,
+                requirements.min_symbols as usize,
             ));
         }
     }
@@ -151,7 +156,7 @@ pub fn validate_password(
     // check against dropbox zxcvbn
     let user_inputs_str: Vec<&str> = user_inputs.iter().map(|s| s.as_str()).collect();
     if let Ok(r) = zxcvbn::zxcvbn(password, &user_inputs_str) {
-        if r.score() < 3 {
+        if r.score() < requirements.min_zxcvbn_score {
             valid_password = false;
             errors.push(PasswordValidationError::NotStrongEnough);
         }

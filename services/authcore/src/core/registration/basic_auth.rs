@@ -3,7 +3,8 @@ use thiserror::Error;
 use tracing::info;
 
 use crate::{
-    models::{error::ModelError, user::User},
+    core::registration::basic_auth::password::PasswordRequirements,
+    models::{error::ModelError, user::User, ModelValue},
     state::AppState,
 };
 
@@ -64,6 +65,7 @@ pub async fn with_basic_auth(
     let res = User::exists(
         state.prisma(),
         crate::models::user::ExistsOr::Email(&data.email),
+        data.application_id,
     )
     .await;
     match res {
@@ -87,11 +89,35 @@ pub async fn with_basic_auth(
         user_input.push(last_name.clone());
     }
 
-    if let Err(e) = password::validate_password(
-        state.config().default_password_requirements,
-        &data.password,
-        user_input,
-    ) {
+    // Get the password requirements from the application
+    // TODO: Introduce caching?
+    let application =
+        match crate::models::application::ReplicatedApplication::find_by_id_with_config(
+            state.prisma(),
+            data.application_id,
+        )
+        .await
+        {
+            Ok(application) => application,
+            Err(_) => return Err(BasicRegistrationError::ApplicationDoesNotExist),
+        };
+
+    // If config is not found, use the default config
+    let password_requirements = match application.basic_auth_config() {
+        ModelValue::Loaded(config) => PasswordRequirements {
+            enable_strict_requirements: config.enable_strict_password(),
+            min_length: config.min_password_length(),
+            max_length: config.max_password_length(),
+            min_lowercase: config.min_lowercase(),
+            min_uppercase: config.min_uppercase(),
+            min_numbers: config.min_numbers(),
+            min_symbols: config.min_symbols(),
+            min_zxcvbn_score: config.zxcvbn_minimum_score(),
+        },
+        _ => state.config().default_password_requirements(),
+    };
+
+    if let Err(e) = password::validate_password(password_requirements, &data.password, user_input) {
         return Err(BasicRegistrationError::InvalidPassword(e));
     }
 
@@ -110,6 +136,7 @@ pub async fn with_basic_auth(
         let res = User::exists(
             state.prisma(),
             crate::models::user::ExistsOr::Username(&username),
+            data.application_id,
         )
         .await;
         match res {

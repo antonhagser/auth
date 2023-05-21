@@ -55,19 +55,23 @@ impl User {
     pub async fn exists<C>(
         prisma: &PrismaClient,
         email_or_username: ExistsOr<C>,
+        application_id: Snowflake,
     ) -> Result<bool, ModelError>
     where
         C: Into<String>,
     {
         match email_or_username {
-            ExistsOr::Email(email) => EmailAddress::exists(prisma, email).await,
-            ExistsOr::Username(username) => User::exists_by_username(prisma, username).await,
+            ExistsOr::Email(email) => EmailAddress::exists(prisma, email, application_id).await,
+            ExistsOr::Username(username) => {
+                User::exists_by_username(prisma, username, application_id).await
+            }
         }
     }
 
     pub async fn exists_by_username<C>(
         prisma: &PrismaClient,
         username: C,
+        application_id: Snowflake,
     ) -> Result<bool, ModelError>
     where
         C: Into<String>,
@@ -75,7 +79,10 @@ impl User {
         let username = username.into();
         Ok(prisma
             .user()
-            .find_first(vec![prisma::user::username::equals(Some(username))])
+            .find_first(vec![
+                prisma::user::username::equals(Some(username)),
+                prisma::user::replicated_application_id::equals(application_id.to_id_signed()),
+            ])
             .exec()
             .await?
             .is_some())

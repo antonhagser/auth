@@ -32,7 +32,7 @@ model User {
     userMetadata UserMetadata[]
 
     // Cross service references
-    replicatedApplication   ReplicatedApplication @relation(fields: [replicatedApplicationID], references: [applicationID])
+    replicatedApplication   ReplicatedApplication @relation(fields: [replicatedApplicationID], references: [applicationID], onDelete: Cascade)
     replicatedApplicationID BigInt
 
     @@unique([username, replicatedApplicationID], name: "Unique_Username_ApplicationID")
@@ -45,6 +45,9 @@ model EmailAddress {
     user   User   @relation(fields: [userID], references: [id], onDelete: Cascade)
     userID BigInt @unique
 
+    replicatedApplication   ReplicatedApplication @relation(fields: [replicatedApplicationID], references: [applicationID], onDelete: Cascade)
+    replicatedApplicationID BigInt
+
     email_address String
 
     verified   Boolean   @default(false)
@@ -54,9 +57,7 @@ model EmailAddress {
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
-    applicationID BigInt
-
-    @@index([email_address, applicationID], name: "Unique_EmailAddress_ApplicationID")
+    @@index([email_address, replicatedApplicationID], name: "Unique_EmailAddress_ApplicationID")
 }
 
 model ExternalUser {
@@ -142,25 +143,20 @@ model ReplicatedApplication {
     basicAuthEnabled Boolean          @default(true)
     basicAuthConfig  BasicAuthConfig?
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-}
-
-enum PasswordStrength {
-    NONE
-    WEAK
-    AVERAGE
-    STRONG
+    createdAt    DateTime       @default(now())
+    updatedAt    DateTime       @updatedAt
+    EmailAddress EmailAddress[]
 }
 
 model BasicAuthConfig {
     applicationID BigInt                @id @unique
     application   ReplicatedApplication @relation(fields: [applicationID], references: [applicationID], onDelete: Cascade)
 
-    passwordStrength PasswordStrength @default(WEAK)
-
     minPasswordLength Int @default(8)
     maxPasswordLength Int @default(128)
+
+    enablePasswordStrengthCheck Boolean @default(true)
+    zxcvbnMinScore              Int     @default(2)
 
     enableStrictPassword Boolean @default(false)
     minUppercase         Int     @default(0)

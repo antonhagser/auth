@@ -39,15 +39,22 @@ impl EmailAddress {
         }
     }
 
-    pub async fn exists<C>(prisma: &PrismaClient, email: C) -> Result<bool, ModelError>
+    pub async fn exists<C>(
+        prisma: &PrismaClient,
+        email: C,
+        application_id: Snowflake,
+    ) -> Result<bool, ModelError>
     where
         C: Into<String>,
     {
         let email_address = prisma
             .email_address()
-            .find_first(vec![prisma::email_address::email_address::equals(
-                email.into(),
-            )])
+            .find_first(vec![
+                prisma::email_address::email_address::equals(email.into()),
+                prisma::email_address::replicated_application_id::equals(
+                    application_id.to_id_signed(),
+                ),
+            ])
             .exec()
             .await?;
 
@@ -122,8 +129,10 @@ impl<'a> EmailAddressBuilder<'a> {
             .create(
                 self.id_generator.next_snowflake().unwrap().to_id_signed(),
                 prisma::user::id::equals(user_id.to_id_signed()),
+                super::prisma::replicated_application::application_id::equals(
+                    application_id.to_id_signed(),
+                ),
                 email_address.email_address().to_owned(),
-                application_id.to_id_signed(),
                 vec![],
             )
             .exec()
