@@ -8,34 +8,25 @@ message GetAuthCoreVersionResponse {
     string version = 1;
 }
 
-message DeleteApplicationRequest {
-    string application_id = 1;
-}
-
-message DeleteApplicationResponse {}
-
-message GetApplicationRequest {
-    string application_id = 1;
-}
-
-message GetApplicationResponse {}
-
 message AddApplicationRequest {
     string application_id = 1;
 }
 
 message AddApplicationResponse {}
 
+message DeleteApplicationRequest {
+    string application_id = 1;
+}
+
+message DeleteApplicationResponse {}
+
 service AuthCorePlatform {
     rpc GetAuthCoreVersion(GetAuthCoreVersionRequest)
         returns (GetAuthCoreVersionResponse) {}
 
-    rpc DeleteApplication(DeleteApplicationRequest)
-        returns (DeleteApplicationResponse) {}
-
-    rpc GetApplication(GetApplicationRequest) returns (GetApplicationResponse) {
-    }
-
     rpc AddApplication(AddApplicationRequest) returns (AddApplicationResponse) {
     }
+
+    rpc DeleteApplication(DeleteApplicationRequest)
+        returns (DeleteApplicationResponse) {}
 }

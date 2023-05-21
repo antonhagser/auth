@@ -3,19 +3,23 @@ use serde::Serialize;
 
 /// API error status codes
 #[derive(Debug, Clone, Copy, Serialize)]
+#[repr(u32)]
 pub enum ErrorStatusCode {
     // Basic registration errors
     /// Invalid password
-    InvalidPassword = 86500,
+    InvalidPassword,
     /// Invalid email address
-    InvalidEmailAddress = 86501,
+    InvalidEmailAddress,
     /// Email address already exists
-    AlreadyExists = 86502,
+    AlreadyExists,
     /// Invalid username
-    InvalidUsername = 86503,
+    InvalidUsername,
+
+    /// Application does not exist
+    ApplicationDoesNotExist,
 
     /// Internal server error
-    InternalServerError = 500,
+    InternalServerError,
 }
 
 impl ErrorStatusCode {
@@ -27,6 +31,7 @@ impl ErrorStatusCode {
             ErrorStatusCode::InvalidEmailAddress => StatusCode::BAD_REQUEST,
             ErrorStatusCode::AlreadyExists => StatusCode::CONFLICT,
             ErrorStatusCode::InvalidUsername => StatusCode::BAD_REQUEST,
+            ErrorStatusCode::ApplicationDoesNotExist => StatusCode::BAD_REQUEST,
             ErrorStatusCode::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }

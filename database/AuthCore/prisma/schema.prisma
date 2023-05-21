@@ -32,11 +32,11 @@ model User {
     userMetadata UserMetadata[]
 
     // Cross service references
-    replicatedApplication   ReplicatedApplication? @relation(fields: [replicatedApplicationId], references: [id])
-    replicatedApplicationId BigInt
+    replicatedApplication   ReplicatedApplication @relation(fields: [replicatedApplicationID], references: [applicationID])
+    replicatedApplicationID BigInt
 
-    @@unique([username, replicatedApplicationId], name: "Unique_Username_ApplicationID")
-    @@index([username, firstName, lastName, replicatedApplicationId])
+    @@unique([username, replicatedApplicationID], name: "Unique_Username_ApplicationID")
+    @@index([username, firstName, lastName, replicatedApplicationID])
 }
 
 model EmailAddress {
@@ -73,12 +73,11 @@ model ExternalUser {
 }
 
 model BasicAuth {
-    id BigInt @id @unique
-
     user   User   @relation(fields: [userID], references: [id], onDelete: Cascade)
-    userID BigInt @unique
+    userID BigInt @id @unique
 
-    username      String @unique
+    // Email is found in EmailAddress in parent User model
+    username      String? @unique
     password_hash String
 
     createdAt DateTime @default(now())
@@ -136,9 +135,7 @@ model UserMetadata {
 
 // ReplicatedApplication is a cross service reference, it exists to avoid unnecessary requests across services.
 model ReplicatedApplication {
-    id BigInt @id @unique
-
-    applicationID BigInt @unique
+    applicationID BigInt @id @unique
 
     User User[]
 
@@ -149,11 +146,27 @@ model ReplicatedApplication {
     updatedAt DateTime @updatedAt
 }
 
-model BasicAuthConfig {
-    id BigInt @id @unique
+enum PasswordStrength {
+    NONE
+    WEAK
+    AVERAGE
+    STRONG
+}
 
-    application   ReplicatedApplication @relation(fields: [applicationID], references: [id], onDelete: Cascade)
-    applicationID BigInt                @unique
+model BasicAuthConfig {
+    applicationID BigInt                @id @unique
+    application   ReplicatedApplication @relation(fields: [applicationID], references: [applicationID], onDelete: Cascade)
+
+    passwordStrength PasswordStrength @default(WEAK)
+
+    minPasswordLength Int @default(8)
+    maxPasswordLength Int @default(128)
+
+    enableStrictPassword Boolean @default(false)
+    minUppercase         Int     @default(0)
+    minLowercase         Int     @default(0)
+    minNumbers           Int     @default(0)
+    minSymbols           Int     @default(0)
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt

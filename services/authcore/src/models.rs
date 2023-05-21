@@ -6,6 +6,7 @@ mod prisma;
 #[allow(unused_imports, dead_code, clippy::all)]
 pub use prisma::PrismaClient;
 
+pub mod application;
 pub mod error;
 pub mod user;
 
@@ -20,12 +21,12 @@ pub enum ModelValue<T> {
     /// The value does not exist.
     NotSet,
     /// The value exists.
-    Some(T),
+    Loaded(T),
 }
 
 impl<T> ModelValue<T> {
     pub const fn is_some(&self) -> bool {
-        matches!(*self, ModelValue::Some(_))
+        matches!(*self, ModelValue::Loaded(_))
     }
 
     pub const fn is_none(&self) -> bool {
@@ -38,7 +39,7 @@ impl<T> ModelValue<T> {
 
     pub const fn as_ref(&self) -> ModelValue<&T> {
         match *self {
-            ModelValue::Some(ref x) => ModelValue::Some(x),
+            ModelValue::Loaded(ref x) => ModelValue::Loaded(x),
             ModelValue::NotLoaded => ModelValue::NotLoaded,
             ModelValue::NotSet => ModelValue::NotSet,
         }
@@ -52,7 +53,7 @@ where
     #[inline]
     fn clone(&self) -> Self {
         match self {
-            ModelValue::Some(x) => ModelValue::Some(x.clone()),
+            ModelValue::Loaded(x) => ModelValue::Loaded(x.clone()),
             ModelValue::NotLoaded => ModelValue::NotLoaded,
             ModelValue::NotSet => ModelValue::NotSet,
         }
@@ -61,7 +62,7 @@ where
     #[inline]
     fn clone_from(&mut self, source: &Self) {
         match (self, source) {
-            (ModelValue::Some(to), ModelValue::Some(from)) => to.clone_from(from),
+            (ModelValue::Loaded(to), ModelValue::Loaded(from)) => to.clone_from(from),
             (to, from) => *to = from.clone(),
         }
     }
@@ -75,7 +76,7 @@ impl<T: PartialEq> SpecOptionPartialEq for T {
     #[inline]
     fn eq(l: &ModelValue<T>, r: &ModelValue<T>) -> bool {
         match (l, r) {
-            (ModelValue::Some(l), ModelValue::Some(r)) => *l == *r,
+            (ModelValue::Loaded(l), ModelValue::Loaded(r)) => *l == *r,
             (ModelValue::NotLoaded, ModelValue::NotLoaded) => true,
             (ModelValue::NotSet, ModelValue::NotSet) => true,
             _ => false,

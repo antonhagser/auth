@@ -24,8 +24,12 @@ pub async fn route(
     let data = registration::BasicRegistrationData {
         email: data.email,
         username: data.username,
+
+        first_name: None,
+        last_name: None,
+
         password: data.password,
-        application_id: data.application_id,
+        application_id: data.application_id.try_into().unwrap(),
     };
 
     // TODO: VERY IMPORTANT
@@ -71,6 +75,18 @@ pub async fn route(
             registration::BasicRegistrationError::QueryError(_) => {
                 let code = ErrorStatusCode::InternalServerError;
                 let error = HTTPResponse::error(code, "Internal server error".to_owned(), ());
+
+                return (code.http_status_code(), Json(error));
+            }
+            registration::BasicRegistrationError::Unknown => {
+                let code = ErrorStatusCode::InternalServerError;
+                let error = HTTPResponse::error(code, "Internal server error".to_owned(), ());
+
+                return (code.http_status_code(), Json(error));
+            }
+            registration::BasicRegistrationError::ApplicationDoesNotExist => {
+                let code = ErrorStatusCode::ApplicationDoesNotExist;
+                let error = HTTPResponse::error(code, "Application does not exist".to_owned(), ());
 
                 return (code.http_status_code(), Json(error));
             }

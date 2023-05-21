@@ -1,4 +1,16 @@
-use crate::state::AppState;
+use std::result::Result;
+
+use tracing::error;
+
+use crate::{
+    models::application::{BasicAuthConfig, ReplicatedApplication},
+    state::AppState,
+};
+
+use super::authcore::{
+    AddApplicationRequest, AddApplicationResponse, DeleteApplicationRequest,
+    DeleteApplicationResponse, GetAuthCoreVersionRequest, GetAuthCoreVersionResponse,
+};
 
 pub struct Platform {
     state: AppState,
@@ -14,41 +26,50 @@ impl Platform {
 impl super::authcore::auth_core_platform_server::AuthCorePlatform for Platform {
     async fn get_auth_core_version(
         &self,
-        _request: tonic::Request<super::authcore::GetAuthCoreVersionRequest>,
-    ) -> std::result::Result<
-        tonic::Response<super::authcore::GetAuthCoreVersionResponse>,
-        tonic::Status,
-    > {
-        let response = super::authcore::GetAuthCoreVersionResponse {
+        _request: tonic::Request<GetAuthCoreVersionRequest>,
+    ) -> Result<tonic::Response<GetAuthCoreVersionResponse>, tonic::Status> {
+        let response = GetAuthCoreVersionResponse {
             version: self.state.service_data().version.into(),
         };
 
         Ok(tonic::Response::new(response))
     }
 
-    async fn delete_application(
-        &self,
-        _request: tonic::Request<super::authcore::DeleteApplicationRequest>,
-    ) -> std::result::Result<
-        tonic::Response<super::authcore::DeleteApplicationResponse>,
-        tonic::Status,
-    > {
-        Err(tonic::Status::unimplemented("not implemented"))
-    }
-
-    async fn get_application(
-        &self,
-        _request: tonic::Request<super::authcore::GetApplicationRequest>,
-    ) -> std::result::Result<tonic::Response<super::authcore::GetApplicationResponse>, tonic::Status>
-    {
-        Err(tonic::Status::unimplemented("not implemented"))
-    }
-
     async fn add_application(
         &self,
-        _request: tonic::Request<super::authcore::AddApplicationRequest>,
-    ) -> std::result::Result<tonic::Response<super::authcore::AddApplicationResponse>, tonic::Status>
-    {
-        Err(tonic::Status::unimplemented("not implemented"))
+        request: tonic::Request<AddApplicationRequest>,
+    ) -> Result<tonic::Response<AddApplicationResponse>, tonic::Status> {
+        let (_, _, data) = request.into_parts();
+
+        let basic_auth_config_builder = BasicAuthConfig::builder();
+
+        if let Err(e) = ReplicatedApplication::new_and_insert(
+            self.state.prisma(),
+            data.application_id.try_into().unwrap(),
+            basic_auth_config_builder,
+        )
+        .await
+        {
+            error!("failed to create application: {}", e);
+
+            return Err(tonic::Status::internal("internal server error"));
+        }
+
+        let response = AddApplicationResponse {};
+        Ok(tonic::Response::new(response))
+    }
+
+    async fn delete_application(
+        &self,
+        request: tonic::Request<DeleteApplicationRequest>,
+    ) -> Result<tonic::Response<DeleteApplicationResponse>, tonic::Status> {
+        let (_, _, data) = request.into_parts();
+
+        let application_id = data.application_id.try_into().unwrap();
+        ReplicatedApplication::delete(self.state.prisma(), application_id)
+            .await
+            .map_err(|_| tonic::Status::internal("internal server error"))?;
+
+        Ok(tonic::Response::new(DeleteApplicationResponse {}))
     }
 }

@@ -49,6 +49,8 @@ pub enum PasswordValidationError {
     NumberCount(usize, usize),
     #[error("invalid symbol count, got {0}, expected {1}")]
     SymbolCount(usize, usize),
+    #[error("password not strong enough")]
+    NotStrongEnough,
 
     #[error("invalid password requirements")]
     #[serde(skip)]
@@ -56,8 +58,9 @@ pub enum PasswordValidationError {
 }
 
 pub fn validate_password(
-    password: &str,
     requirements: PasswordRequirements,
+    password: &str,
+    user_inputs: Vec<String>,
 ) -> Result<(), Vec<PasswordValidationError>> {
     // validate requirements
     if let Err(e) = requirements.validate() {
@@ -142,6 +145,15 @@ pub fn validate_password(
                 symbol_count,
                 requirements.min_symbols,
             ));
+        }
+    }
+
+    // check against dropbox zxcvbn
+    let user_inputs_str: Vec<&str> = user_inputs.iter().map(|s| s.as_str()).collect();
+    if let Ok(r) = zxcvbn::zxcvbn(password, &user_inputs_str) {
+        if r.score() < 3 {
+            valid_password = false;
+            errors.push(PasswordValidationError::NotStrongEnough);
         }
     }
 

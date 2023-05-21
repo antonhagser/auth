@@ -2,7 +2,11 @@ use chrono::{DateTime, Utc};
 use crypto::snowflake::{Snowflake, SnowflakeGenerator};
 use prisma_client_rust::QueryError;
 
-use crate::models::{error::ModelError, prisma, PrismaClient};
+use crate::models::{
+    error::ModelError,
+    prisma::{self, email_address::Data},
+    PrismaClient,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct EmailAddress {
@@ -80,6 +84,21 @@ impl EmailAddress {
 
     pub fn email_address(&self) -> &str {
         self.email_address.as_ref()
+    }
+}
+
+impl From<Data> for EmailAddress {
+    fn from(value: Data) -> Self {
+        Self {
+            id: value.id.try_into().unwrap(),
+            user_id: value.user_id.try_into().unwrap(),
+            email_address: value.email_address,
+            verified: value.verified,
+            verified_at: value.verified_at.map(|v| v.into()),
+            verified_ip: value.verified_ip,
+            created_at: value.created_at.into(),
+            updated_at: value.updated_at.into(),
+        }
     }
 }
 

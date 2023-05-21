@@ -6,7 +6,7 @@ use self::email_address::EmailAddressBuilder;
 
 use super::{
     error::ModelError,
-    prisma::{self, user::Data, PrismaClient},
+    prisma::{self, basic_auth, user::Data, PrismaClient},
     ModelValue,
 };
 
@@ -30,7 +30,7 @@ pub struct User {
     external_users: Vec<ExternalUser>,
 
     password_enabled: bool,
-    basic_auth: Option<BasicAuth>,
+    basic_auth: ModelValue<BasicAuth>,
 
     last_login_at: Option<DateTime<Utc>>,
     last_login_ip: Option<String>,
@@ -98,7 +98,7 @@ impl User {
             first_name: None,
             last_name: None,
             email_builder,
-            basic_auth: None,
+            basic_auth_builder: None,
 
             id: user_id,
             application_id,
@@ -135,7 +135,7 @@ impl User {
         self.password_enabled
     }
 
-    pub fn basic_auth(&self) -> Option<&BasicAuth> {
+    pub fn basic_auth(&self) -> ModelValue<&BasicAuth> {
         self.basic_auth.as_ref()
     }
 
@@ -174,21 +174,47 @@ impl User {
 
 impl From<Data> for User {
     fn from(value: Data) -> Self {
+        // Check if email address is loaded
+        let email_address = if let Some(email_address) = value.email_address {
+            if let Some(email_address) = email_address {
+                ModelValue::Loaded(EmailAddress::from(*email_address))
+            } else {
+                ModelValue::NotSet
+            }
+        } else {
+            ModelValue::NotLoaded
+        };
+
+        // Check if basic auth is loaded
+        let basic_auth = if let Some(basic_auth) = value.basic_auth {
+            if let Some(basic_auth) = basic_auth {
+                ModelValue::Loaded(BasicAuth::from(*basic_auth))
+            } else {
+                ModelValue::NotSet
+            }
+        } else {
+            ModelValue::NotLoaded
+        };
+
         User {
             id: value.id.try_into().unwrap(),
             username: value.username,
             first_name: value.first_name,
             last_name: value.last_name,
-            email_address: ModelValue::NotLoaded,
+            email_address,
+            // Todo: Implement ModelValue for external users
             external_users: vec![],
             password_enabled: value.password_enabled,
-            basic_auth: None,
+            basic_auth,
             last_login_at: value.last_login_at.map(|v| v.into()),
             last_login_ip: value.last_login_ip,
             created_at: value.created_at.into(),
             updated_at: value.updated_at.into(),
+            // Todo: Implement ModelValue
             sessions: vec![],
+            // Todo: Implement ModelValue
             user_tokens: vec![],
+            // Todo: Implement ModelValue
             user_metadata: vec![],
             application_id: value.replicated_application_id.try_into().unwrap(),
         }
@@ -197,11 +223,9 @@ impl From<Data> for User {
 
 #[derive(Debug, Clone)]
 pub struct BasicAuth {
-    id: Snowflake,
-
     user_id: Snowflake,
 
-    username: String,
+    username: Option<String>,
     password_hash: String,
 
     created_at: DateTime<Utc>,
@@ -209,6 +233,10 @@ pub struct BasicAuth {
 }
 
 impl BasicAuth {
+    pub fn builder(user_id: Snowflake, password_hash: String) -> BasicAuthBuilder {
+        BasicAuthBuilder::new(user_id, password_hash)
+    }
+
     pub fn user_id(&self) -> Snowflake {
         self.user_id
     }
@@ -219,6 +247,68 @@ impl BasicAuth {
 
     pub fn updated_at(&self) -> DateTime<Utc> {
         self.updated_at
+    }
+
+    pub fn username(&self) -> Option<&String> {
+        self.username.as_ref()
+    }
+
+    pub fn password_hash(&self) -> &str {
+        self.password_hash.as_ref()
+    }
+}
+
+impl From<basic_auth::Data> for BasicAuth {
+    fn from(value: basic_auth::Data) -> Self {
+        BasicAuth {
+            user_id: value.user_id.try_into().unwrap(),
+            username: value.username,
+            password_hash: value.password_hash,
+            created_at: value.created_at.into(),
+            updated_at: value.updated_at.into(),
+        }
+    }
+}
+
+pub struct BasicAuthBuilder {
+    user_id: Snowflake,
+
+    username: Option<String>,
+    password_hash: String,
+}
+
+impl BasicAuthBuilder {
+    pub fn new(user_id: Snowflake, password_hash: String) -> Self {
+        BasicAuthBuilder {
+            user_id,
+            username: None,
+            password_hash,
+        }
+    }
+
+    pub fn username(&mut self, username: String) -> &mut Self {
+        self.username = Some(username);
+        self
+    }
+
+    pub async fn build(self, client: &PrismaClient) -> Result<BasicAuth, QueryError> {
+        let data = client
+            .basic_auth()
+            .create(
+                prisma::user::id::equals(self.user_id.to_id_signed()),
+                self.password_hash.clone(),
+                vec![prisma::basic_auth::username::set(self.username.clone())],
+            )
+            .exec()
+            .await?;
+
+        Ok(BasicAuth {
+            user_id: data.user_id.try_into().unwrap(),
+            username: data.username,
+            password_hash: data.password_hash,
+            created_at: data.created_at.into(),
+            updated_at: data.updated_at.into(),
+        })
     }
 }
 
@@ -272,7 +362,7 @@ pub struct UserBuilder<'a> {
     first_name: Option<String>,
     last_name: Option<String>,
     email_builder: EmailAddressBuilder<'a>,
-    basic_auth: Option<BasicAuth>,
+    basic_auth_builder: Option<BasicAuthBuilder>,
 
     id: Snowflake,
     application_id: Snowflake,
@@ -281,22 +371,22 @@ pub struct UserBuilder<'a> {
 }
 
 impl<'a> UserBuilder<'a> {
-    pub fn username(mut self, username: String) -> Self {
+    pub fn username(&mut self, username: String) -> &mut Self {
         self.username = Some(username);
         self
     }
 
-    pub fn first_name(mut self, first_name: String) -> Self {
+    pub fn first_name(&mut self, first_name: String) -> &mut Self {
         self.first_name = Some(first_name);
         self
     }
 
-    pub fn last_name(mut self, last_name: String) -> Self {
+    pub fn last_name(&mut self, last_name: String) -> &mut Self {
         self.last_name = Some(last_name);
         self
     }
 
-    pub fn user_metadata(mut self, key: String, value: String) -> Self {
+    pub fn user_metadata(&mut self, key: String, value: String) -> &mut Self {
         self.user_metadata.push(UserMetadata {
             id: self
                 .id_generator
@@ -311,25 +401,18 @@ impl<'a> UserBuilder<'a> {
         self
     }
 
-    pub fn basic_auth(mut self, username: String, password_hash: String) -> Self {
-        self.basic_auth = Some(BasicAuth {
-            id: self
-                .id_generator
-                .next_snowflake()
-                .expect("failed to generate snowflake"),
-            user_id: self.id,
-            username,
-            password_hash,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        });
+    pub fn basic_auth(&mut self, password_hash: String) -> &mut Self {
+        let mut builder = BasicAuthBuilder::new(self.id, password_hash);
 
+        if let Some(username) = &self.username {
+            builder.username(username.clone());
+        }
+
+        self.basic_auth_builder = Some(builder);
         self
     }
 
     pub async fn build(self) -> Result<User, ModelError> {
-        // Todo: Make sure that application exists?
-
         let user_id = self.id;
         let application_id = self.application_id;
 
@@ -342,13 +425,13 @@ impl<'a> UserBuilder<'a> {
             user_create_params.push(prisma::user::last_name::set(Some(last_name.clone())));
         }
 
-        if self.basic_auth.is_some() {
+        if self.basic_auth_builder.is_some() {
             user_create_params.push(prisma::user::password_enabled::set(true));
         }
 
-        let result: (
+        let (email_address, basic_auth, user_metadata, user): (
             EmailAddress,
-            Option<BasicAuth>,
+            ModelValue<BasicAuth>,
             Vec<UserMetadata>,
             prisma::user::Data,
         ) = self
@@ -359,7 +442,9 @@ impl<'a> UserBuilder<'a> {
                     .user()
                     .create(
                         user_id.to_id_signed(),
-                        self.application_id.to_id_signed(),
+                        super::prisma::replicated_application::application_id::equals(
+                            self.application_id.to_id_signed(),
+                        ),
                         user_create_params,
                     )
                     .exec()
@@ -371,22 +456,11 @@ impl<'a> UserBuilder<'a> {
                     .build(&client, user_id, self.application_id)
                     .await?;
 
-                let basic_auth = if let Some(basic_auth) = self.basic_auth {
-                    client
-                        .basic_auth()
-                        .create(
-                            basic_auth.id.to_id_signed(),
-                            prisma::user::id::equals(user_id.to_id_signed()),
-                            basic_auth.username.clone(),
-                            basic_auth.password_hash.clone(),
-                            vec![],
-                        )
-                        .exec()
-                        .await?;
-
-                    Some(basic_auth)
+                // Insert and build basic auth
+                let basic_auth = if let Some(basic_auth_builder) = self.basic_auth_builder {
+                    ModelValue::Loaded(basic_auth_builder.build(&client).await?)
                 } else {
-                    None
+                    ModelValue::NotSet
                 };
 
                 let user_metadata = self.user_metadata;
@@ -414,16 +488,15 @@ impl<'a> UserBuilder<'a> {
             username: self.username,
             first_name: self.first_name,
             last_name: self.last_name,
-            email_address: ModelValue::Some(result.0),
-            basic_auth: result.1,
-            user_metadata: result.2,
-
+            email_address: ModelValue::Loaded(email_address),
+            basic_auth,
+            user_metadata,
             external_users: vec![],
-            password_enabled: result.3.password_enabled,
+            password_enabled: user.password_enabled,
             last_login_at: None,
             last_login_ip: None,
-            created_at: result.3.created_at.into(),
-            updated_at: result.3.updated_at.into(),
+            created_at: user.created_at.into(),
+            updated_at: user.updated_at.into(),
             sessions: vec![],
             user_tokens: vec![],
         };
