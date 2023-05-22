@@ -10,20 +10,20 @@ use crate::models::PrismaClient;
 /// `State` represents the server's global state.
 #[derive(Debug)]
 pub struct State {
-    prisma: PrismaClient,
+    prisma_client: PrismaClient,
     id_generator: SnowflakeGenerator,
 }
 
 impl State {
-    pub fn new(prisma: PrismaClient, id_generator: SnowflakeGenerator) -> Self {
+    pub fn new(prisma_client: PrismaClient, id_generator: SnowflakeGenerator) -> Self {
         Self {
-            prisma,
+            prisma_client,
             id_generator,
         }
     }
 
     pub fn prisma(&self) -> &PrismaClient {
-        &self.prisma
+        &self.prisma_client
     }
 
     pub fn id_generator(&self) -> &SnowflakeGenerator {

@@ -33,7 +33,7 @@ pub async fn run(addr: SocketAddr, state: AppState) -> Result<(), GrpcServerErro
     let platform = platform::Platform::new(state);
     let svc_platform = authcore::auth_core_platform_server::AuthCorePlatformServer::new(platform);
 
-    tracing::debug!("grpc listening on {}", addr);
+    tracing::info!("grpc listening on {}", addr);
     tonic::transport::Server::builder()
         .add_service(svc_platform)
         .serve(addr)

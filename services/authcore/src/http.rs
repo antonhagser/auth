@@ -92,7 +92,7 @@ pub async fn run(addr: SocketAddr, state: AppState) -> Result<(), HTTPServerErro
         .with_state(state.clone())
         .nest("/", modules::router(state.clone()));
 
-    tracing::debug!("http listening on {}", addr);
+    tracing::info!("http listening on {}", addr);
 
     match axum::Server::bind(&addr)
         .serve(app.into_make_service())

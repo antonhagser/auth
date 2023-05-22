@@ -23,7 +23,7 @@ pub enum GrpcServerError {}
 /// Currently, this function cannot return any errors as the implementation
 /// is a placeholder.
 pub async fn run(addr: SocketAddr, _state: AppState) -> Result<(), GrpcServerError> {
-    tracing::debug!("grpc listening on {}", addr);
+    tracing::info!("grpc listening on {}", addr);
     // tonic::transport::Server::builder()
     //     .add_service(HelloServer::new(HelloService))
     //     .serve(addr)

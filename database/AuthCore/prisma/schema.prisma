@@ -27,7 +27,6 @@ model User {
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
-    sessions     Session[]
     userTokens   UserToken[]
     userMetadata UserMetadata[]
 
@@ -87,24 +86,10 @@ model BasicAuth {
     @@index([username])
 }
 
-model Session {
-    id BigInt @id @unique
-
-    user   User   @relation(fields: [userID], references: [id], onDelete: Cascade)
-    userID BigInt
-
-    token String @unique
-
-    blacklisted   Boolean   @default(false)
-    blacklistedAt DateTime?
-
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-}
-
 enum UserTokenType {
     EMAIL_VERIFICATION
     PASSWORD_RESET
+    REFRESH
 }
 
 model UserToken {
@@ -118,6 +103,7 @@ model UserToken {
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
+    expiresAt DateTime
 
     @@index([token])
 }

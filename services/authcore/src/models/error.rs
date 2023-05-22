@@ -4,4 +4,7 @@ pub enum ModelError {
     DatabaseError(#[from] prisma_client_rust::QueryError),
     #[error("not found")]
     RecordNotFound,
+
+    #[error("missing field in builder")]
+    MissingField(String),
 }

@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 use crate::{
     core::basic::register::{self, BasicRegistrationData},
-    http::response::{ErrorStatusCode, HTTPResponse},
+    http::response::HTTPResponse,
     state::AppState,
 };
 
@@ -42,53 +42,67 @@ pub async fn route(
 
         match e {
             register::BasicRegistrationError::InvalidEmailAddressFormat => {
-                let code = ErrorStatusCode::InvalidEmailAddress;
-                let error = HTTPResponse::error(code, "Invalid email address".to_owned(), ());
+                let error = HTTPResponse::error(
+                    "InvalidEmailAddress",
+                    "Invalid email address".to_owned(),
+                    (),
+                );
 
-                return (code.http_status_code(), Json(error));
+                return (StatusCode::BAD_REQUEST, Json(error));
             }
             register::BasicRegistrationError::EmailAddressAlreadyExists => {
-                let code = ErrorStatusCode::AlreadyExists;
-                let error =
-                    HTTPResponse::error(code, "Email address already in use".to_owned(), ());
+                let error = HTTPResponse::error(
+                    "AlreadyExists",
+                    "Email address already in use".to_owned(),
+                    (),
+                );
 
-                return (code.http_status_code(), Json(error));
+                return (StatusCode::CONFLICT, Json(error));
             }
             register::BasicRegistrationError::InvalidPassword(reason) => {
-                let code = ErrorStatusCode::InvalidPassword;
-                let error = HTTPResponse::error(code, "Invalid password".to_owned(), reason);
+                let error =
+                    HTTPResponse::error("InvalidPassword", "Invalid password".to_owned(), reason);
 
-                return (code.http_status_code(), Json(error));
+                return (StatusCode::BAD_REQUEST, Json(error));
             }
             register::BasicRegistrationError::InvalidUsernameFormat => {
-                let code = ErrorStatusCode::InvalidUsername;
-                let error = HTTPResponse::error(code, "Invalid username".to_owned(), ());
+                let error =
+                    HTTPResponse::error("InvalidUsername", "Invalid username".to_owned(), ());
 
-                return (code.http_status_code(), Json(error));
+                return (StatusCode::BAD_REQUEST, Json(error));
             }
             register::BasicRegistrationError::UsernameAlreadyExists => {
-                let code = ErrorStatusCode::AlreadyExists;
-                let error = HTTPResponse::error(code, "Username already in use".to_owned(), ());
+                let error =
+                    HTTPResponse::error("AlreadyExists", "Username already in use".to_owned(), ());
 
-                return (code.http_status_code(), Json(error));
+                return (StatusCode::CONFLICT, Json(error));
             }
             register::BasicRegistrationError::QueryError(_) => {
-                let code = ErrorStatusCode::InternalServerError;
-                let error = HTTPResponse::error(code, "Internal server error".to_owned(), ());
+                let error = HTTPResponse::error(
+                    "InternalServerError",
+                    "Internal server error".to_owned(),
+                    (),
+                );
 
-                return (code.http_status_code(), Json(error));
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(error));
             }
             register::BasicRegistrationError::Unknown => {
-                let code = ErrorStatusCode::InternalServerError;
-                let error = HTTPResponse::error(code, "Internal server error".to_owned(), ());
+                let error = HTTPResponse::error(
+                    "InternalServerError",
+                    "Internal server error".to_owned(),
+                    (),
+                );
 
-                return (code.http_status_code(), Json(error));
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(error));
             }
             register::BasicRegistrationError::ApplicationDoesNotExist => {
-                let code = ErrorStatusCode::ApplicationDoesNotExist;
-                let error = HTTPResponse::error(code, "Application does not exist".to_owned(), ());
+                let error = HTTPResponse::error(
+                    "ApplicationDoesNotExist",
+                    "Application does not exist".to_owned(),
+                    (),
+                );
 
-                return (code.http_status_code(), Json(error));
+                return (StatusCode::BAD_REQUEST, Json(error));
             }
         }
     };

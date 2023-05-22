@@ -1,9 +1,5 @@
 use serde::Serialize;
 
-pub use status_codes::ErrorStatusCode;
-
-mod status_codes;
-
 /// Common HTTP response struct
 ///
 /// # Structure
@@ -37,14 +33,14 @@ pub struct HTTPResponse {
 /// ```
 #[derive(Debug, Serialize)]
 pub struct HTTPResponseError {
-    code: ErrorStatusCode,
+    code: String,
     message: String,
     details: serde_json::Value,
 }
 
 impl HTTPResponse {
     /// Create a new HTTP response with data
-    pub fn new<T>(data: T) -> Self
+    pub fn ok<T>(data: T) -> Self
     where
         T: Serialize,
     {
@@ -58,9 +54,10 @@ impl HTTPResponse {
     }
 
     /// Create a new HTTP response with error
-    pub fn error<T>(code: ErrorStatusCode, message: String, details: T) -> Self
+    pub fn error<T, E>(code: E, message: String, details: T) -> Self
     where
         T: Serialize,
+        E: Into<String>,
     {
         let details = serde_json::to_value(details).unwrap();
 
@@ -68,7 +65,7 @@ impl HTTPResponse {
             success: false,
             data: None,
             error: Some(HTTPResponseError {
-                code,
+                code: code.into(),
                 message,
                 details,
             }),

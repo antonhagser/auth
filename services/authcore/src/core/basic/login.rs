@@ -5,7 +5,7 @@ use crate::{
     models::{
         application::ReplicatedApplication,
         error::ModelError::{self, RecordNotFound},
-        user::UserWith,
+        user::{User, UserWith},
     },
     state::AppState,
 };
@@ -55,7 +55,7 @@ pub struct BasicLoginData {
 pub async fn with_basic_auth(
     state: &AppState,
     data: BasicLoginData,
-) -> Result<(), BasicLoginError> {
+) -> Result<User, BasicLoginError> {
     // Get application from database.
     let application =
         match ReplicatedApplication::find_by_id(state.prisma(), data.application_id).await {
@@ -125,5 +125,5 @@ pub async fn with_basic_auth(
         return Err(BasicLoginError::WrongCredentials);
     }
 
-    Ok(())
+    Ok(user)
 }

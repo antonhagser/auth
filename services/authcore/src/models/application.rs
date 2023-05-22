@@ -16,11 +16,11 @@ pub struct ReplicatedApplication {
 
 impl ReplicatedApplication {
     pub async fn new_and_insert(
-        prisma: &PrismaClient,
+        client: &PrismaClient,
         application_id: Snowflake,
         basic_auth_config_builder: BasicAuthConfigBuilder,
     ) -> Result<Self, QueryError> {
-        let (app, cfg): (super::prisma::replicated_application::Data, BasicAuthConfig) = prisma
+        let (app, cfg): (super::prisma::replicated_application::Data, BasicAuthConfig) = client
             ._transaction()
             .run::<QueryError, _, _, _>(|client| async move {
                 // Insert replicated application
@@ -51,10 +51,10 @@ impl ReplicatedApplication {
     }
 
     pub async fn delete(
-        prisma: &PrismaClient,
+        client: &PrismaClient,
         application_id: Snowflake,
     ) -> Result<(), QueryError> {
-        prisma
+        client
             .replicated_application()
             .delete(
                 super::prisma::replicated_application::application_id::equals(
@@ -67,8 +67,8 @@ impl ReplicatedApplication {
         Ok(())
     }
 
-    pub async fn find_by_id(prisma: &PrismaClient, id: Snowflake) -> Result<Self, ModelError> {
-        let app = prisma
+    pub async fn find_by_id(client: &PrismaClient, id: Snowflake) -> Result<Self, ModelError> {
+        let app = client
             .replicated_application()
             .find_first(vec![
                 super::prisma::replicated_application::application_id::equals(id.to_id_signed()),
@@ -83,10 +83,10 @@ impl ReplicatedApplication {
     }
 
     pub async fn find_by_id_with_config(
-        prisma: &PrismaClient,
+        client: &PrismaClient,
         id: Snowflake,
     ) -> Result<Self, ModelError> {
-        let app = prisma
+        let app = client
             .replicated_application()
             .find_first(vec![
                 super::prisma::replicated_application::application_id::equals(id.to_id_signed()),

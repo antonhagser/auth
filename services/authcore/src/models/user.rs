@@ -12,9 +12,11 @@ use super::{
 
 pub use email_address::EmailAddress;
 pub use external_user::ExternalUser;
+pub use token::UserToken;
 
 mod email_address;
 mod external_user;
+mod token;
 
 #[derive(Debug, Clone)]
 pub struct User {
@@ -39,7 +41,6 @@ pub struct User {
     updated_at: DateTime<Utc>,
 
     sessions: Vec<Session>,
-    user_tokens: Vec<UserToken>,
     user_metadata: Vec<UserMetadata>,
 
     application_id: Snowflake,
@@ -58,7 +59,7 @@ pub enum UserWith {
 
 impl User {
     pub async fn find_by_email<C>(
-        prisma: &PrismaClient,
+        client: &PrismaClient,
         email: C,
         application_id: Snowflake,
         user_with: Vec<UserWith>,
@@ -74,7 +75,7 @@ impl User {
             };
         }
 
-        let email_address = prisma
+        let email_address = client
             .email_address()
             .find_first(vec![
                 super::prisma::email_address::email_address::equals(email.into()),
@@ -104,7 +105,7 @@ impl User {
     }
 
     pub async fn find_by_username<C>(
-        prisma: &PrismaClient,
+        client: &PrismaClient,
         username: C,
         application_id: Snowflake,
         user_with: Vec<UserWith>,
@@ -112,7 +113,7 @@ impl User {
     where
         C: Into<String>,
     {
-        let mut find = prisma.user().find_first(vec![
+        let mut find = client.user().find_first(vec![
             prisma::user::username::equals(Some(username.into())),
             prisma::user::replicated_application_id::equals(application_id.to_id_signed()),
         ]);
@@ -132,7 +133,7 @@ impl User {
 
     pub fn builder<'a>(
         id_generator: &'a SnowflakeGenerator,
-        prisma: &'a PrismaClient,
+        client: &'a PrismaClient,
         application_id: Snowflake,
         email: String,
     ) -> UserBuilder<'a> {
@@ -141,7 +142,7 @@ impl User {
 
         UserBuilder {
             id_generator,
-            prisma,
+            client,
 
             username: None,
             first_name: None,
@@ -208,10 +209,6 @@ impl User {
         self.sessions.as_ref()
     }
 
-    pub fn user_tokens(&self) -> &[UserToken] {
-        self.user_tokens.as_ref()
-    }
-
     pub fn user_metadata(&self) -> &[UserMetadata] {
         self.user_metadata.as_ref()
     }
@@ -261,8 +258,6 @@ impl From<Data> for User {
             updated_at: value.updated_at.into(),
             // Todo: Implement ModelValue
             sessions: vec![],
-            // Todo: Implement ModelValue
-            user_tokens: vec![],
             // Todo: Implement ModelValue
             user_metadata: vec![],
             application_id: value.replicated_application_id.try_into().unwrap(),
@@ -377,20 +372,6 @@ pub struct Session {
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
-pub struct UserToken {
-    id: Snowflake,
-
-    user_id: Snowflake,
-
-    token_type: super::prisma::UserTokenType,
-    token: String,
-
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
 pub struct UserMetadata {
     id: Snowflake,
 
@@ -405,7 +386,7 @@ pub struct UserMetadata {
 
 pub struct UserBuilder<'a> {
     id_generator: &'a SnowflakeGenerator,
-    prisma: &'a PrismaClient,
+    client: &'a PrismaClient,
 
     username: Option<String>,
     first_name: Option<String>,
@@ -484,7 +465,7 @@ impl<'a> UserBuilder<'a> {
             Vec<UserMetadata>,
             prisma::user::Data,
         ) = self
-            .prisma
+            .client
             ._transaction()
             .run::<QueryError, _, _, _>(|client| async move {
                 let user_data = client
@@ -547,7 +528,6 @@ impl<'a> UserBuilder<'a> {
             created_at: user.created_at.into(),
             updated_at: user.updated_at.into(),
             sessions: vec![],
-            user_tokens: vec![],
         };
 
         Ok(user)

@@ -40,14 +40,14 @@ impl EmailAddress {
     }
 
     pub async fn find<C>(
-        prisma: &PrismaClient,
+        client: &PrismaClient,
         email: C,
         application_id: Snowflake,
     ) -> Result<EmailAddress, ModelError>
     where
         C: Into<String>,
     {
-        let email_address = prisma
+        let email_address = client
             .email_address()
             .find_first(vec![
                 prisma::email_address::email_address::equals(email.into()),
@@ -120,14 +120,14 @@ pub struct EmailAddressBuilder<'a> {
 impl<'a> EmailAddressBuilder<'a> {
     pub async fn build(
         self,
-        prisma: &PrismaClient,
+        client: &PrismaClient,
         user_id: Snowflake,
         application_id: Snowflake,
     ) -> Result<EmailAddress, QueryError> {
         let email_address = self.email_address;
         let user_id = user_id;
 
-        prisma
+        client
             .email_address()
             .create(
                 self.id_generator.next_snowflake().unwrap().to_id_signed(),

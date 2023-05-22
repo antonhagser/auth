@@ -14,26 +14,26 @@ mod config;
 /// `State` represents the server's global state.
 #[derive(Debug)]
 pub struct State {
-    prisma: PrismaClient,
+    prisma_client: PrismaClient,
     id_generator: SnowflakeGenerator,
     service_data: ServiceData,
 }
 
 impl State {
     pub fn new(
-        prisma: PrismaClient,
+        prisma_client: PrismaClient,
         id_generator: SnowflakeGenerator,
         service_data: ServiceData,
     ) -> Self {
         Self {
-            prisma,
+            prisma_client,
             id_generator,
             service_data,
         }
     }
 
     pub fn prisma(&self) -> &PrismaClient {
-        &self.prisma
+        &self.prisma_client
     }
 
     pub fn id_generator(&self) -> &SnowflakeGenerator {

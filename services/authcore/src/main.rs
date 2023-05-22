@@ -56,10 +56,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // If we are running in debug mode, bind to localhost
     let ip = if cfg!(debug_assertions) {
-        tracing::debug!("running in debug mode");
+        tracing::info!("running in debug mode");
         Ipv4Addr::LOCALHOST
     } else {
-        tracing::debug!("running in release mode");
+        tracing::info!("running in release mode");
         Ipv4Addr::UNSPECIFIED
     };
 
