@@ -3,7 +3,10 @@
 
 use std::sync::Arc;
 
-use crypto::snowflake::SnowflakeGenerator;
+use crypto::{
+    snowflake::SnowflakeGenerator,
+    tokens::paseto::{self, SymmetricKey},
+};
 
 use crate::{models::PrismaClient, ServiceData};
 
@@ -12,11 +15,11 @@ pub use config::{Config, CONFIG};
 mod config;
 
 /// `State` represents the server's global state.
-#[derive(Debug)]
 pub struct State {
     prisma_client: PrismaClient,
     id_generator: SnowflakeGenerator,
     service_data: ServiceData,
+    paseto_key: SymmetricKey,
 }
 
 impl State {
@@ -24,11 +27,15 @@ impl State {
         prisma_client: PrismaClient,
         id_generator: SnowflakeGenerator,
         service_data: ServiceData,
+        paseto_key: &[u8],
     ) -> Self {
+        let keys = paseto::generate_key(paseto_key);
+
         Self {
             prisma_client,
             id_generator,
             service_data,
+            paseto_key: keys,
         }
     }
 
@@ -46,6 +53,10 @@ impl State {
 
     pub fn service_data(&self) -> &ServiceData {
         &self.service_data
+    }
+
+    pub fn paseto_key(&self) -> &SymmetricKey {
+        &self.paseto_key
     }
 }
 

@@ -25,6 +25,8 @@ regex = "1.8.1"
 futures = "0.3.28"
 zxcvbn = "2.2.2"
 validator = { version = "0.16.0", features = ["derive"] }
+uuid = { version = "1.3.3", features = ["v4"] }
+base64 = "0.21.1"
 
 [dev-dependencies]
 rand = "0.8.5"

@@ -49,8 +49,7 @@
 
 pub mod extended_select;
 pub mod input;
-pub mod jsonwebtoken;
-pub mod paseto;
 pub mod password;
 pub mod snowflake;
+pub mod tokens;
 pub mod totp;

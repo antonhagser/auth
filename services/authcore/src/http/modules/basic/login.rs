@@ -2,14 +2,15 @@ use axum::{extract::State, Form, Json};
 use chrono::{Duration, Utc};
 use hyper::StatusCode;
 use serde::{Deserialize, Serialize};
+use tracing::error;
 
 use crate::{
-    core::basic::{login, login::BasicLoginData},
-    http::response::HTTPResponse,
-    models::{
-        prisma::UserTokenType,
-        user::{ExistsOr, UserToken},
+    core::{
+        basic::{login, login::BasicLoginData},
+        token,
     },
+    http::response::HTTPResponse,
+    models::user::ExistsOr,
     state::AppState,
 };
 
@@ -52,35 +53,59 @@ pub async fn route(
         }
     };
 
+    let (transaction, transaction_client) = state.prisma()._transaction().begin().await.unwrap();
+
     // Generate a new user refresh token
-    let user_token = UserToken::builder(state.id_generator())
-        .user_id(user.id())
-        .token_type(UserTokenType::Refresh)
-        .token("".into())
-        .expires_at(Utc::now() + Duration::days(30))
-        .build(state.prisma())
-        .await;
+    let refresh_token = token::new_refresh_token(
+        &transaction_client,
+        state.id_generator(),
+        user.id(),
+        Utc::now() + Duration::days(30),
+    )
+    .await;
 
-    let user_token = match user_token {
-        Ok(token) => token,
-        Err(_) => {
-            let error = HTTPResponse::error(
-                "InternalServerError",
-                "Internal server error".to_owned(),
-                (),
-            );
+    let refresh_token = match refresh_token {
+        Ok(refresh_token) => refresh_token,
+        Err(e) => {
+            error!("Failed to generate refresh token: {}", e);
+            let _ = transaction.rollback(transaction_client).await;
 
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(error));
+            let response = HTTPResponse::error("InternalServerError", "A refresh token could not be created for the account due to an internal server error.", ());
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
         }
     };
 
-    // TODO: Generate a new user access token
+    // Generate access token
+    let access_token = token::new_access_token(
+        &state,
+        user.id(),
+        Utc::now() + Duration::hours(1),
+        refresh_token.id(),
+    );
+
+    let access_token = match access_token {
+        Ok(access_token) => access_token,
+        Err(e) => {
+            error!("Failed to generate access token: {}", e);
+            let _ = transaction.rollback(transaction_client).await;
+
+            let response = HTTPResponse::error("InternalServerError", "An access token could not be created for the account due to an internal server error.", ());
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
+        }
+    };
+
+    // Commit the transaction
+    if transaction.commit(transaction_client).await.is_err() {
+        let response = HTTPResponse::error("InternalServerError", "", ());
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
+    }
+
+    // Return the access token and refresh token to the client
     let response = LoginResponse {
-        access_token: "UNIMPLEMENTED".into(),
-        refresh_token: user_token.token().into(),
+        access_token,
+        refresh_token: refresh_token.token().into(),
     };
 
     let response = HTTPResponse::ok(response);
-
     (StatusCode::OK, Json(response))
 }

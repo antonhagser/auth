@@ -6,7 +6,7 @@
 //! # Example
 //!
 //! ```
-//! use crypto::jsonwebtoken::{JWT, DefaultClaims, Claims};
+//! use crypto::tokens::jsonwebtoken::{JWT, DefaultClaims, Claims};
 //! use rsa::{pkcs8::LineEnding, RsaPrivateKey, RsaPublicKey};
 //!
 //! let mut rng = rand::thread_rng();
@@ -25,7 +25,7 @@
 //!     .to_vec();
 //!
 //! let id = "user123";
-//! let exp_unix = (chrono::Utc::now() + chrono::Duration::days(1)).timestamp() as usize;
+//! let exp_unix = chrono::Utc::now() + chrono::Duration::days(1);
 //!
 //! let claims: DefaultClaims = DefaultClaims::new(id.to_string(), "authcore".to_string(), exp_unix);
 //!
@@ -37,6 +37,7 @@
 //! assert_eq!(claims.sub(), id);
 //! ```
 
+use chrono::{DateTime, Utc};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey};
 use serde::{Deserialize, Serialize};
 
@@ -50,8 +51,12 @@ pub struct DefaultClaims {
 
 impl DefaultClaims {
     /// Creates a new instance of the `DefaultClaims` struct.
-    pub fn new(sub: String, iss: String, exp: usize) -> Self {
-        Self { sub, iss, exp }
+    pub fn new(subject: String, issuer: String, expiration: DateTime<Utc>) -> Self {
+        Self {
+            sub: subject,
+            iss: issuer,
+            exp: expiration.timestamp() as usize,
+        }
     }
 }
 
@@ -173,7 +178,7 @@ pub trait Claims {
 
 #[cfg(test)]
 mod tests {
-    use crate::jsonwebtoken::{Claims, DefaultClaims, JWT};
+    use super::{Claims, DefaultClaims, JWT};
     use rsa::{pkcs8::LineEnding, RsaPrivateKey, RsaPublicKey};
 
     #[test]
@@ -188,7 +193,7 @@ mod tests {
             .to_vec();
 
         let id = "user123";
-        let exp_unix = (chrono::Utc::now() + chrono::Duration::days(1)).timestamp() as usize;
+        let exp_unix = chrono::Utc::now() + chrono::Duration::days(1);
 
         let claims: DefaultClaims =
             DefaultClaims::new(id.to_string(), "authcore".to_string(), exp_unix);
@@ -217,7 +222,7 @@ mod tests {
             .to_vec();
 
         let id = "user123";
-        let exp_unix = (chrono::Utc::now() + chrono::Duration::days(1)).timestamp() as usize;
+        let exp_unix = chrono::Utc::now() + chrono::Duration::days(1);
 
         let claims: DefaultClaims =
             DefaultClaims::new(id.to_string(), "authcore".to_string(), exp_unix);

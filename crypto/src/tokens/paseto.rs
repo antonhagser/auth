@@ -57,6 +57,7 @@ pub struct OwnedClaims<C> {
     /// The unique identifier of the token.
     token_id: String,
     /// Any additional claims.
+    #[serde(flatten)]
     other: Option<C>,
 }
 
@@ -103,16 +104,16 @@ impl<C> OwnedClaims<C> {
 }
 
 /// Allows conversion from `DefaultClaims` to `OwnedClaims`.
-impl<'a, C> From<DefaultClaims<'a>> for OwnedClaims<C> {
-    fn from(value: DefaultClaims<'a>) -> Self {
+impl<C> From<DefaultClaims> for OwnedClaims<C> {
+    fn from(value: DefaultClaims) -> Self {
         OwnedClaims {
             issuer: value.issuer.to_string(),
             issued_at: value.issued_at,
             expiration: value.expiration,
             not_before: value.not_before,
-            subject: value.subject.map(|s| s.to_string()),
-            audience: value.audience.map(|s| s.to_string()),
-            token_id: value.token_id.to_string(),
+            subject: value.subject,
+            audience: value.audience,
+            token_id: value.token_id,
             other: None,
         }
     }
@@ -123,9 +124,9 @@ impl<'a, C> From<DefaultClaims<'a>> for OwnedClaims<C> {
 /// Default claims are useful when working with Paseto tokens that have
 /// a known lifetime.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct DefaultClaims<'a> {
+pub struct DefaultClaims {
     #[serde(rename = "iss")]
-    issuer: &'a str,
+    issuer: String,
 
     #[serde(rename = "iat")]
     issued_at: Option<DateTime<Utc>>,
@@ -137,26 +138,43 @@ pub struct DefaultClaims<'a> {
     not_before: DateTime<Utc>,
 
     #[serde(rename = "sub", skip_serializing_if = "Option::is_none")]
-    subject: Option<&'a str>,
+    subject: Option<String>,
 
     #[serde(rename = "aud", skip_serializing_if = "Option::is_none")]
-    audience: Option<&'a str>,
+    audience: Option<String>,
 
     #[serde(rename = "jti")]
-    token_id: &'a str,
+    token_id: String,
 
     #[serde(flatten)]
     other: Option<Value>,
 }
 
-impl<'a> DefaultClaims<'a> {
-    pub fn new(
-        issuer: &'a str,
-        expiration: DateTime<Utc>,
-        not_before: DateTime<Utc>,
-        token_id: &'a str,
-        other: Option<Value>,
-    ) -> Self {
+impl DefaultClaims {
+    pub fn builder<C, D>(issuer: C, expiration: DateTime<Utc>, token_id: D) -> DefaultClaimsBuilder
+    where
+        C: Into<String>,
+        D: Into<String>,
+    {
+        DefaultClaimsBuilder::new(issuer.into(), expiration, token_id.into())
+    }
+}
+
+pub struct DefaultClaimsBuilder {
+    issuer: String,
+    issued_at: Option<DateTime<Utc>>,
+    expiration: DateTime<Utc>,
+    not_before: DateTime<Utc>,
+    subject: Option<String>,
+    audience: Option<String>,
+    token_id: String,
+    other: Option<Value>,
+}
+
+impl DefaultClaimsBuilder {
+    pub fn new(issuer: String, expiration: DateTime<Utc>, token_id: String) -> Self {
+        let not_before = Utc::now();
+
         Self {
             issuer,
             issued_at: None,
@@ -165,20 +183,56 @@ impl<'a> DefaultClaims<'a> {
             subject: None,
             audience: None,
             token_id,
-            other,
+            other: None,
         }
     }
 
-    /// Sets the subject of the token.
-    pub fn set_subject(&mut self, subject: &'a str) {
-        self.subject = Some(subject);
+    pub fn issued_at(mut self, issued_at: DateTime<Utc>) -> Self {
+        self.issued_at = Some(issued_at);
+        self
     }
 
-    /// Sets the audience of the token.
-    pub fn set_audience(&mut self, audience: &'a str) {
-        self.audience = Some(audience);
+    pub fn subject<C>(mut self, subject: C) -> Self
+    where
+        C: Into<String>,
+    {
+        self.subject = Some(subject.into());
+        self
+    }
+
+    pub fn audience<C>(mut self, audience: C) -> Self
+    where
+        C: Into<String>,
+    {
+        self.audience = Some(audience.into());
+        self
+    }
+
+    pub fn other(mut self, other: Value) -> Self {
+        self.other = Some(other);
+        self
+    }
+
+    pub fn not_before(mut self, not_before: DateTime<Utc>) -> Self {
+        self.not_before = not_before;
+        self
+    }
+
+    pub fn build(self) -> DefaultClaims {
+        DefaultClaims {
+            issuer: self.issuer,
+            issued_at: self.issued_at,
+            expiration: self.expiration,
+            not_before: self.not_before,
+            subject: self.subject,
+            audience: self.audience,
+            token_id: self.token_id,
+            other: self.other,
+        }
     }
 }
+
+pub type SymmetricKey = PasetoSymmetricKey<V4, Local>;
 
 /// Generates a Paseto symmetric key from the provided key bytes.
 ///
@@ -189,7 +243,7 @@ impl<'a> DefaultClaims<'a> {
 /// # Returns
 ///
 /// * A `PasetoSymmetricKey` instance.
-pub fn generate_key(key: &[u8]) -> PasetoSymmetricKey<V4, Local> {
+pub fn generate_key(key: &[u8]) -> SymmetricKey {
     PasetoSymmetricKey::<V4, Local>::from(Key::from(key))
 }
 
@@ -215,15 +269,15 @@ pub fn encrypt_token(
         .set_claim(NotBeforeClaim::try_from(
             default_claims.not_before.to_rfc3339(),
         )?)
-        .set_claim(IssuerClaim::from(default_claims.issuer))
-        .set_claim(TokenIdentifierClaim::from(default_claims.token_id));
+        .set_claim(IssuerClaim::from(default_claims.issuer.as_str()))
+        .set_claim(TokenIdentifierClaim::from(default_claims.token_id.as_str()));
 
-    if let Some(subject) = default_claims.subject {
-        token.set_claim(SubjectClaim::from(subject));
+    if let Some(subject) = &default_claims.subject {
+        token.set_claim(SubjectClaim::from(subject.as_str()));
     }
 
-    if let Some(audience) = default_claims.audience {
-        token.set_claim(AudienceClaim::from(audience));
+    if let Some(audience) = &default_claims.audience {
+        token.set_claim(AudienceClaim::from(audience.as_str()));
     }
 
     if let Some(other) = default_claims.other {
@@ -325,13 +379,13 @@ mod tests {
         // test the key with a token
         let token = encrypt_token(
             DefaultClaims {
-                issuer: "authcore",
+                issuer: "authcore".into(),
                 issued_at: None,
                 expiration: Utc::now() + chrono::Duration::days(1),
                 not_before: Utc::now(),
                 subject: None,
                 audience: None,
-                token_id: "user123",
+                token_id: "user123".into(),
 
                 other: None,
             },
@@ -349,13 +403,13 @@ mod tests {
         // test the key with a token
         let token = encrypt_token(
             DefaultClaims {
-                issuer: "authcore",
+                issuer: "authcore".into(),
                 issued_at: None,
                 expiration: Utc::now() + chrono::Duration::days(1),
                 not_before: Utc::now(),
                 subject: None,
                 audience: None,
-                token_id: "user123",
+                token_id: "user123".into(),
 
                 other: None,
             },
@@ -372,13 +426,13 @@ mod tests {
         // test the key with a token
         let token = encrypt_token(
             DefaultClaims {
-                issuer: "authcore",
+                issuer: "authcore".into(),
                 issued_at: None,
                 expiration: Utc::now() + chrono::Duration::days(1),
                 not_before: Utc::now(),
                 subject: None,
                 audience: None,
-                token_id: "user123",
+                token_id: "user123".into(),
 
                 other: None,
             },

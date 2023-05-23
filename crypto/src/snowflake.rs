@@ -137,6 +137,13 @@ impl SnowflakeGenerator {
 #[derive(Debug, Default, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Snowflake(u64);
 
+#[allow(clippy::from_over_into)]
+impl Into<String> for Snowflake {
+    fn into(self) -> String {
+        self.to_string()
+    }
+}
+
 impl Serialize for Snowflake {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.to_string())
