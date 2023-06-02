@@ -1,0 +1,64 @@
+/* Size */
+.spinner[data-size="large"] {
+    --stroke-width: 4px;
+    --size: 32px;
+}
+
+.spinner[data-size="medium"] {
+    --stroke-width: 3px;
+    --size: 24px;
+}
+
+.spinner[data-size="small"] {
+    --stroke-width: 2px;
+    --size: 16px;
+}
+
+.spinner[data-size="tiny"] {
+    --stroke-width: 2px;
+    --size: 12px;
+}
+
+/* Design */
+.spinner {
+    --radius: calc(var(--size) / 2 - var(--stroke-width) / 2);
+    --offset: calc(1.7 * 3.14 * var(--radius));
+    --duration: 1.53s;
+
+    width: calc(var(--radius) * 2 + var(--stroke-width));
+    height: calc(var(--radius) * 2 + var(--stroke-width));
+    animation: rotate var(--duration) linear infinite;
+}
+
+.spinner > circle {
+    fill: transparent;
+    stroke-linecap: round;
+    stroke-width: var(--stroke-width);
+    stroke-dasharray: var(--offset);
+    stroke-dashoffset: var(--offset);
+    animation: dash var(--duration) ease-in-out infinite;
+}
+
+@keyframes dash {
+    0% {
+        stroke-dashoffset: var(--offset);
+    }
+    50% {
+        stroke-dashoffset: 0;
+    }
+    100% {
+        stroke-dashoffset: calc(var(--offset) * -1);
+    }
+}
+
+@keyframes rotate {
+    0% {
+        transform: rotate(0deg);
+    }
+    75% {
+        transform: rotate(270deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
