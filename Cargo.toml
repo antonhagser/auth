@@ -1,6 +1,6 @@
 [workspace]
-members = ["./services/authcore", "./services/auditlog", "./services/platform", "./services/webhook", "./services/messaging", "prisma-cli"]
+members = ["./services/authcore", "./services/auditlog", "./services/platform", "./services/webhook", "./services/messaging", "./misc/prisma-cli"]
 resolver = "2"
 
 [workspace.dependencies]
-crypto = { path = "./crypto" }
+crypto = { path = "./misc/crypto" }
