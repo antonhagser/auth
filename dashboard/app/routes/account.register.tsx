@@ -1,27 +1,178 @@
-"use client";
-
-import Link from "next/link";
-import React, { useState } from "react";
+import React, { createRef, useRef, useState } from "react";
 import { LockClosedIcon } from "@heroicons/react/24/solid";
-import "./login.css";
-import Image from "next/image";
 import { Spinner } from "../components/Spinner/spinner";
 
-const LoginPage = () => {
+import { z } from "zod";
+
+import { zxcvbn, zxcvbnOptions } from "@zxcvbn-ts/core";
+import * as zxcvbnCommonPackage from "@zxcvbn-ts/language-common";
+import * as zxcvbnEnPackage from "@zxcvbn-ts/language-en";
+import { Link } from "@remix-run/react";
+
+// Error messages
+const errorMessages = {
+    firstName: {
+        required: "First name is required",
+        tooLong: "First name is too long",
+    },
+    lastName: {
+        required: "Last name is required",
+        tooLong: "Last name is too long",
+    },
+    email: {
+        required: "Email is required",
+        invalid: "Email is invalid",
+    },
+    password: {
+        tooShort: "Password is too short",
+        tooLong: "Password is too long",
+    },
+};
+
+const options = {
+    translations: zxcvbnEnPackage.translations,
+    graphs: zxcvbnCommonPackage.adjacencyGraphs,
+    dictionary: {
+        ...zxcvbnCommonPackage.dictionary,
+        ...zxcvbnEnPackage.dictionary,
+    },
+};
+
+zxcvbnOptions.setOptions(options);
+
+interface Metadata {
+    key: string;
+    value: string;
+}
+
+interface RegisterRequestBody {
+    metadata: Metadata;
+    email: string;
+    password: string;
+}
+
+export default function Register() {
     const [firstName, setFirstName] = useState("");
     const [lastName, setLastName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-
     const [loadingSend, setLoadingSend] = useState(false);
 
-    const handleLogin = (e) => {
+    // References
+    const firstNameRef = createRef<HTMLInputElement>();
+    const lastNameRef = createRef<HTMLInputElement>();
+    const emailRef = createRef<HTMLInputElement>();
+    const passwordRef = createRef<HTMLInputElement>();
+
+    const handleRegister = async (e) => {
         e.preventDefault();
+        if (loadingSend) {
+            return;
+        }
+
         setLoadingSend(true);
 
-        setTimeout(() => {
+        // Set min loading time to make the user think the app is doing something
+        let startTime = Date.now();
+
+        // Validate data
+        try {
+            // Validate first name
+            try {
+                z.string()
+                    .min(1, { message: errorMessages.firstName.required })
+                    .max(50, { message: errorMessages.firstName.tooLong })
+                    .parse(firstName);
+            } catch (e) {
+                firstNameRef.current?.setCustomValidity("OJ");
+                console.error(e);
+                setLoadingSend(false);
+                return;
+            }
+
+            // Validate last name
+            try {
+                z.string()
+                    .min(1, { message: errorMessages.lastName.required })
+                    .max(50, { message: errorMessages.lastName.tooLong })
+                    .parse(lastName);
+            } catch (e) {
+                console.error(e);
+                setLoadingSend(false);
+                return;
+            }
+
+            // Validate email
+            try {
+                z.string()
+                    .min(1, { message: errorMessages.email.required })
+                    .email({ message: errorMessages.email.invalid })
+                    .parse(email);
+            } catch (e) {
+                console.error(e);
+                setLoadingSend(false);
+                return;
+            }
+
+            // Validate password
+            try {
+                z.string()
+                    .min(8, { message: errorMessages.password.tooShort })
+                    .max(127, { message: errorMessages.password.tooLong })
+                    .parse(password);
+            } catch (e) {
+                console.error(e);
+                setLoadingSend(false);
+                return;
+            }
+
+            // Validate password strength
+            let result = zxcvbn(password);
+            if (result.score < 3) {
+                console.error("Password is too weak");
+                setLoadingSend(false);
+                return;
+            }
+        } catch (e) {
+            console.error(e);
             setLoadingSend(false);
-        }, 2000);
+            return;
+        }
+
+        // Send data to server
+        try {
+            let response = await fetch("localhost:8080/basic/register", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({}),
+            });
+        } catch (e) {
+            console.error(e);
+
+            // Set min loading time to make the user think the app is doing something
+            let endTime = Date.now();
+            let timeDiff = endTime - startTime;
+            if (timeDiff < 500) {
+                await new Promise((resolve) =>
+                    setTimeout(resolve, 500 - timeDiff)
+                );
+
+                setLoadingSend(false);
+            }
+
+            return;
+        }
+
+        // Set min loading time to make the user think the app is doing something
+        let endTime = Date.now();
+        let timeDiff = endTime - startTime;
+        if (timeDiff < 500) {
+            await new Promise((resolve) => setTimeout(resolve, 500 - timeDiff));
+
+            setLoadingSend(false);
+        }
     };
 
     return (
@@ -49,7 +200,7 @@ const LoginPage = () => {
                         </p>
                         <div className="flex items-center justify-between mt-4">
                             <div className="flex items-center">
-                                <Image
+                                <img
                                     className="w-10 h-10 rounded-full"
                                     src="/pfp.png"
                                     alt="Profile"
@@ -76,7 +227,7 @@ const LoginPage = () => {
                         </p>
                     </div>
                     <div className="mt-8">
-                        <form onSubmit={handleLogin}>
+                        <form onSubmit={handleRegister} noValidate>
                             <div className="mb-4 flex">
                                 <div className="w-1/2 mr-2">
                                     <label
@@ -86,7 +237,7 @@ const LoginPage = () => {
                                         First name
                                     </label>
                                     <input
-                                        className="appearance-none block w-full px-4 py-2 mt-2 text-gray-700 bg-white border rounded-md focus:border-gray-400 focus:ring-gray-300 focus:outline-none focus:ring focus:ring-opacity-40 disabled:opacity-50 disabled:bg-gray-200 disabled:cursor-not-allowed transition-colors duration-300"
+                                        className="appearance-none block w-full px-4 py-2 mt-2 text-gray-700 bg-white border rounded-md focus:border-gray-400 focus:ring-gray-300 focus:outline-none focus:ring focus:ring-opacity-40 disabled:opacity-50 disabled:bg-gray-200 disabled:cursor-not-allowed transition-colors duration-200"
                                         id="firstName"
                                         type="text"
                                         value={firstName}
@@ -94,6 +245,8 @@ const LoginPage = () => {
                                             setFirstName(e.target.value)
                                         }
                                         disabled={loadingSend}
+                                        required
+                                        ref={firstNameRef}
                                     />
                                 </div>
                                 <div className="w-1/2 ml-2">
@@ -104,7 +257,7 @@ const LoginPage = () => {
                                         Last name
                                     </label>
                                     <input
-                                        className="appearance-none block w-full px-4 py-2 mt-2 text-gray-700 bg-white border rounded-md focus:border-gray-400 focus:ring-gray-300 focus:outline-none focus:ring focus:ring-opacity-40 disabled:opacity-50 disabled:bg-gray-200 disabled:cursor-not-allowed transition-colors duration-300"
+                                        className="appearance-none block w-full px-4 py-2 mt-2 text-gray-700 bg-white border rounded-md focus:border-gray-400 focus:ring-gray-300 focus:outline-none focus:ring focus:ring-opacity-40 disabled:opacity-50 disabled:bg-gray-200 disabled:cursor-not-allowed transition-colors duration-200"
                                         id="lastName"
                                         type="text"
                                         value={lastName}
@@ -112,6 +265,8 @@ const LoginPage = () => {
                                             setLastName(e.target.value)
                                         }
                                         disabled={loadingSend}
+                                        required
+                                        ref={lastNameRef}
                                     />
                                 </div>
                             </div>
@@ -124,8 +279,12 @@ const LoginPage = () => {
                                 </label>
                                 <input
                                     type="email"
-                                    className="block w-full px-4 py-2 mt-2 text-gray-700 bg-white border rounded-md focus:border-gray-400 focus:ring-gray-300 focus:outline-none focus:ring focus:ring-opacity-40 disabled:opacity-50 disabled:bg-gray-200 disabled:cursor-not-allowed transition-colors duration-300"
+                                    className="block w-full px-4 py-2 mt-2 text-gray-700 bg-white border rounded-md focus:border-gray-400 focus:ring-gray-300 focus:outline-none focus:ring focus:ring-opacity-40 disabled:opacity-50 disabled:bg-gray-200 disabled:cursor-not-allowed transition-colors duration-200"
                                     disabled={loadingSend}
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    required
+                                    ref={emailRef}
                                 />
                             </div>
                             <div className="mb-2">
@@ -137,24 +296,34 @@ const LoginPage = () => {
                                 </label>
                                 <input
                                     type="password"
-                                    className="block w-full px-4 py-2 mt-2 text-gray-700 bg-white border rounded-md focus:border-gray-400 focus:ring-gray-300 focus:outline-none focus:ring focus:ring-opacity-40 disabled:opacity-50 disabled:bg-gray-200 disabled:cursor-not-allowed transition-colors duration-300"
+                                    className="block w-full px-4 py-2 mt-2 text-gray-700 bg-white border rounded-md focus:border-gray-400 focus:ring-gray-300 focus:outline-none focus:ring focus:ring-opacity-40 disabled:opacity-50 disabled:bg-gray-200 disabled:cursor-not-allowed transition-colors duration-200"
                                     disabled={loadingSend}
+                                    value={password}
+                                    onChange={(e) =>
+                                        setPassword(e.target.value)
+                                    }
+                                    required
+                                    ref={passwordRef}
                                 />
                             </div>
                             <div className="mt-6">
                                 <button
-                                    className="w-full px-4 py-4 tracking-wide text-white transition-colors duration-300 transform bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:bg-blue-700 flex items-center justify-center"
-                                    onClick={handleLogin}
+                                    className="w-full h-12 px-4 py-4 tracking-wide text-white transition-colors duration-200 transform bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:bg-blue-700 flex items-center justify-center"
+                                    onClick={handleRegister}
                                     disabled={loadingSend}
                                 >
-                                    {loadingSend ? (
-                                        <Spinner
-                                            size="medium"
-                                            className="stroke-blue-100"
-                                        ></Spinner>
-                                    ) : (
-                                        <span>Sign Up</span>
-                                    )}
+                                    {(function () {
+                                        if (loadingSend) {
+                                            return (
+                                                <Spinner
+                                                    size="small"
+                                                    className="stroke-blue-100"
+                                                ></Spinner>
+                                            );
+                                        } else {
+                                            return <span>Sign Up</span>;
+                                        }
+                                    })()}
                                 </button>
                             </div>
                         </form>
@@ -199,7 +368,7 @@ const LoginPage = () => {
                         <p className="mt-4 text-sm text-center text-gray-700 pb-6 pt-4">
                             Already have an account?{" "}
                             <Link
-                                href="/signin"
+                                to="/signin"
                                 className="font-medium text-blue-600 hover:underline"
                             >
                                 Sign in
@@ -210,6 +379,4 @@ const LoginPage = () => {
             </div>
         </div>
     );
-};
-
-export default LoginPage;
+}

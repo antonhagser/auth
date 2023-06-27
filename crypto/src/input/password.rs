@@ -8,10 +8,10 @@ use validator::{Validate, ValidationErrors};
 #[derive(Debug, Clone, Copy, Validate, Deserialize, PartialEq, Eq)]
 pub struct PasswordRequirements {
     /// Minimum password length
-    #[validate(range(min = 8, max = 128))]
+    #[validate(range(min = 8, max = 127))]
     pub min_length: u8,
     /// Maximum password length
-    #[validate(range(min = 8, max = 128))]
+    #[validate(range(min = 8, max = 127))]
     pub max_length: u8,
 
     /// Enable strict requirements. If enabled, the password must contain at least one lowercase letter, one uppercase letter, one number, and one symbol.

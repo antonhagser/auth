@@ -1,6 +1,9 @@
-use axum::{extract::State, Form, Json};
+use axum::{
+    extract::{FromRequest, State},
+    Form, Json,
+};
 use chrono::{Duration, Utc};
-use hyper::StatusCode;
+use hyper::{Body, Request, StatusCode};
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
@@ -18,7 +21,7 @@ use crate::{
 pub struct LoginRequest {
     email_or_username: String,
     password: String,
-    application_id: u64,
+    application_id: String,
 }
 
 #[derive(Serialize)]
@@ -29,8 +32,54 @@ pub struct LoginResponse {
 
 pub async fn route(
     State(state): State<AppState>,
-    Form(data): Form<LoginRequest>,
+    request: Request<Body>,
 ) -> (StatusCode, Json<HTTPResponse>) {
+    // Accept multiple different ways to give the data, url encoded form data or json body
+    let data: LoginRequest = match request
+        .headers()
+        .get("content-type")
+        .and_then(|header| header.to_str().ok())
+    {
+        Some("application/x-www-form-urlencoded") => {
+            // Todo: Handle errors
+            let data = Form::<LoginRequest>::from_request(request, &())
+                .await
+                .unwrap();
+
+            data.0
+        }
+        Some("application/json") => {
+            let data = Json::<LoginRequest>::from_request(request, &())
+                .await
+                .unwrap();
+
+            data.0
+        }
+        _ => {
+            let response = HTTPResponse::error(
+                "BadRequest",
+                "Invalid content type, expected application/x-www-form-urlencoded or application/json".to_owned(),
+                (),
+            );
+
+            return (StatusCode::BAD_REQUEST, Json(response));
+        }
+    };
+
+    // Convert the application ID to a snowflake
+    let application_id = match data.application_id.try_into() {
+        Ok(id) => id,
+        Err(_) => {
+            let response = HTTPResponse::error(
+                "InvalidApplicationID",
+                "Invalid application ID".to_owned(),
+                (),
+            );
+
+            return (StatusCode::BAD_REQUEST, Json(response));
+        }
+    };
+
     let email_or_username = if data.email_or_username.contains('@') {
         ExistsOr::Email(data.email_or_username)
     } else {
@@ -40,7 +89,7 @@ pub async fn route(
     let login_data = BasicLoginData {
         email_or_username,
         password: data.password,
-        application_id: data.application_id.try_into().unwrap(),
+        application_id,
     };
 
     let user = match login::with_basic_auth(&state, login_data).await {

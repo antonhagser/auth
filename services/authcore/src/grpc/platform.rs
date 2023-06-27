@@ -43,9 +43,23 @@ impl super::authcore::auth_core_platform_server::AuthCorePlatform for Platform {
 
         let basic_auth_config_builder = BasicAuthConfig::builder();
 
+        // Verify data
+        let application_id = if let Ok(id) = data.application_id.try_into() {
+            if ReplicatedApplication::find_by_id(self.state.prisma(), id)
+                .await
+                .is_ok()
+            {
+                return Err(tonic::Status::already_exists("application already exists"));
+            }
+
+            id
+        } else {
+            return Err(tonic::Status::invalid_argument("application id is invalid"));
+        };
+
         if let Err(e) = ReplicatedApplication::new_and_insert(
             self.state.prisma(),
-            data.application_id.try_into().unwrap(),
+            application_id,
             basic_auth_config_builder,
         )
         .await
@@ -70,7 +84,13 @@ impl super::authcore::auth_core_platform_server::AuthCorePlatform for Platform {
     ) -> Result<tonic::Response<DeleteApplicationResponse>, tonic::Status> {
         let (_, _, data) = request.into_parts();
 
-        let application_id = data.application_id.try_into().unwrap();
+        // Verify data
+        let application_id = if let Ok(id) = data.application_id.try_into() {
+            id
+        } else {
+            return Err(tonic::Status::invalid_argument("application id is invalid"));
+        };
+
         ReplicatedApplication::delete(self.state.prisma(), application_id)
             .await
             .map_err(|_| tonic::Status::internal("internal server error"))?;

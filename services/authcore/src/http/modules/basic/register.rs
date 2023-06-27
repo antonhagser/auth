@@ -1,4 +1,5 @@
 use axum::{extract::State, Form, Json};
+use crypto::snowflake::Snowflake;
 use hyper::StatusCode;
 use serde::Deserialize;
 
@@ -20,6 +21,19 @@ pub async fn route(
     State(state): State<AppState>,
     Form(data): Form<RegisterRequest>,
 ) -> (StatusCode, Json<HTTPResponse>) {
+    // Convert the application ID to a snowflake
+    let application_id: Snowflake = if let Ok(id) = data.application_id.try_into() {
+        id
+    } else {
+        let error = HTTPResponse::error(
+            "InvalidApplicationID",
+            "Invalid application ID".to_owned(),
+            (),
+        );
+
+        return (StatusCode::BAD_REQUEST, Json(error));
+    };
+
     // Configure the registration data
     let data = BasicRegistrationData {
         email: data.email,
@@ -29,7 +43,7 @@ pub async fn route(
         last_name: None,
 
         password: data.password,
-        application_id: data.application_id.try_into().unwrap(),
+        application_id,
     };
 
     // TODO: VERY IMPORTANT

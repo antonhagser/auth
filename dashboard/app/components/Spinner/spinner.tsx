@@ -1,6 +1,4 @@
-import styles from "./styles.css";
-
-export const links = () => [{ rel: "stylesheet", href: styles }];
+import "./styles.css";
 
 const sizeMap = {
     tiny: [6, 5],

@@ -17,7 +17,9 @@ use serde::Serialize;
 #[derive(Debug, Serialize)]
 pub struct HTTPResponse {
     success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     data: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<HTTPResponseError>,
 }
 

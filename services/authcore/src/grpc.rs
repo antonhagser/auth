@@ -16,7 +16,10 @@ pub mod authcore {
 /// when running the gRPC server. As the current implementation is a placeholder,
 /// there are no variants defined.
 #[derive(Debug, thiserror::Error)]
-pub enum GrpcServerError {}
+pub enum GrpcServerError {
+    #[error("gRPC server error")]
+    GRPCServerError(tonic::transport::Error),
+}
 
 /// Starts and runs the gRPC server on the given address with the provided state.
 ///
@@ -38,7 +41,7 @@ pub async fn run(addr: SocketAddr, state: AppState) -> Result<(), GrpcServerErro
         .add_service(svc_platform)
         .serve(addr)
         .await
-        .unwrap();
+        .map_err(GrpcServerError::GRPCServerError)?;
 
     #[allow(unreachable_code)]
     Ok(())
