@@ -11,7 +11,6 @@ generator client {
 model User {
     id BigInt @id @unique
 
-    username  String?
     firstName String?
     lastName  String?
 
@@ -34,8 +33,7 @@ model User {
     replicatedApplication   ReplicatedApplication @relation(fields: [replicatedApplicationID], references: [applicationID], onDelete: Cascade)
     replicatedApplicationID BigInt
 
-    @@unique([username, replicatedApplicationID], name: "Unique_Username_ApplicationID")
-    @@index([username, firstName, lastName, replicatedApplicationID])
+    @@index([firstName, lastName, replicatedApplicationID])
 }
 
 model EmailAddress {
@@ -77,13 +75,10 @@ model BasicAuth {
     userID BigInt @id @unique
 
     // Email is found in EmailAddress in parent User model
-    username      String? @unique
     password_hash String
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
-
-    @@index([username])
 }
 
 enum UserTokenType {

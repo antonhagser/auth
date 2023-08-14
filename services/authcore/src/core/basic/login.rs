@@ -15,15 +15,12 @@ pub enum BasicLoginError {
     /// The email address format is invalid.
     #[error("invalid email address")]
     InvalidEmailAddressFormat,
-    /// The username format is invalid.
-    #[error("invalid username")]
-    InvalidUsernameFormat,
 
     /// The application does not exist.
     #[error("application does not exist")]
     ApplicationDoesNotExist,
 
-    /// The email address or username in combination with the password is invalid.
+    /// The email address in combination with the password is invalid.
     #[error("wrong credentials")]
     WrongCredentials,
 
@@ -39,7 +36,7 @@ pub enum BasicLoginError {
 }
 
 pub struct BasicLoginData {
-    pub email_or_username: crate::models::user::ExistsOr<String>,
+    pub email: String,
 
     pub password: String,
 
@@ -71,41 +68,21 @@ pub async fn with_basic_auth(
     // Do not validate password due to the possibility of password requirements changing.
 
     // Get user from database.
-    let user = match data.email_or_username {
-        crate::models::user::ExistsOr::Email(email) => {
-            match crate::models::user::User::find_by_email(
-                state.prisma(),
-                email,
-                application.application_id(),
-                vec![UserWith::BasicAuth],
-            )
-            .await
-            {
-                Ok(user) => user,
-                Err(ModelError::RecordNotFound) => {
-                    return Err(BasicLoginError::NotFound);
-                }
-                _ => {
-                    return Err(BasicLoginError::Unknown);
-                }
+    let user = {
+        match crate::models::user::User::find_by_email(
+            state.prisma(),
+            data.email,
+            application.application_id(),
+            vec![UserWith::BasicAuth],
+        )
+        .await
+        {
+            Ok(user) => user,
+            Err(ModelError::RecordNotFound) => {
+                return Err(BasicLoginError::NotFound);
             }
-        }
-        crate::models::user::ExistsOr::Username(username) => {
-            match crate::models::user::User::find_by_username(
-                state.prisma(),
-                username,
-                application.application_id(),
-                vec![UserWith::BasicAuth],
-            )
-            .await
-            {
-                Ok(user) => user,
-                Err(ModelError::RecordNotFound) => {
-                    return Err(BasicLoginError::NotFound);
-                }
-                _ => {
-                    return Err(BasicLoginError::Unknown);
-                }
+            _ => {
+                return Err(BasicLoginError::Unknown);
             }
         }
     };

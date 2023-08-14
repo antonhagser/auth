@@ -23,7 +23,6 @@ pub struct User {
     id: Snowflake,
 
     // Todo: Replace Option with a new type which implements a enum None (exists but not loaded), NotSet (not set), Some (set to a value)
-    username: Option<String>,
     first_name: Option<String>,
     last_name: Option<String>,
 
@@ -44,12 +43,6 @@ pub struct User {
     user_metadata: Vec<UserMetadata>,
 
     application_id: Snowflake,
-}
-
-#[derive(Debug, Clone)]
-pub enum ExistsOr<C> {
-    Email(C),
-    Username(C),
 }
 
 pub enum UserWith {
@@ -104,33 +97,6 @@ impl User {
         }
     }
 
-    pub async fn find_by_username<C>(
-        client: &PrismaClient,
-        username: C,
-        application_id: Snowflake,
-        user_with: Vec<UserWith>,
-    ) -> Result<User, ModelError>
-    where
-        C: Into<String>,
-    {
-        let mut find = client.user().find_first(vec![
-            prisma::user::username::equals(Some(username.into())),
-            prisma::user::replicated_application_id::equals(application_id.to_id_signed()),
-        ]);
-
-        for with in user_with {
-            find = match with {
-                UserWith::EmailAddress => find.with(prisma::user::email_address::fetch()),
-                UserWith::BasicAuth => find.with(prisma::user::basic_auth::fetch()),
-            };
-        }
-
-        match find.exec().await? {
-            Some(data) => Ok(User::from(data)),
-            None => Err(ModelError::RecordNotFound),
-        }
-    }
-
     pub fn builder<'a>(
         id_generator: &'a SnowflakeGenerator,
         client: &'a PrismaClient,
@@ -144,7 +110,6 @@ impl User {
             id_generator,
             client,
 
-            username: None,
             first_name: None,
             last_name: None,
             email_builder,
@@ -159,10 +124,6 @@ impl User {
 
     pub fn id(&self) -> Snowflake {
         self.id
-    }
-
-    pub fn username(&self) -> Option<&String> {
-        self.username.as_ref()
     }
 
     pub fn first_name(&self) -> Option<&String> {
@@ -244,7 +205,6 @@ impl From<Data> for User {
 
         User {
             id: value.id.try_into().unwrap(),
-            username: value.username,
             first_name: value.first_name,
             last_name: value.last_name,
             email_address,
@@ -269,7 +229,6 @@ impl From<Data> for User {
 pub struct BasicAuth {
     user_id: Snowflake,
 
-    username: Option<String>,
     password_hash: String,
 
     created_at: DateTime<Utc>,
@@ -293,10 +252,6 @@ impl BasicAuth {
         self.updated_at
     }
 
-    pub fn username(&self) -> Option<&String> {
-        self.username.as_ref()
-    }
-
     pub fn password_hash(&self) -> &str {
         self.password_hash.as_ref()
     }
@@ -306,7 +261,6 @@ impl From<basic_auth::Data> for BasicAuth {
     fn from(value: basic_auth::Data) -> Self {
         BasicAuth {
             user_id: value.user_id.try_into().unwrap(),
-            username: value.username,
             password_hash: value.password_hash,
             created_at: value.created_at.into(),
             updated_at: value.updated_at.into(),
@@ -317,7 +271,6 @@ impl From<basic_auth::Data> for BasicAuth {
 pub struct BasicAuthBuilder {
     user_id: Snowflake,
 
-    username: Option<String>,
     password_hash: String,
 }
 
@@ -325,14 +278,8 @@ impl BasicAuthBuilder {
     pub fn new(user_id: Snowflake, password_hash: String) -> Self {
         BasicAuthBuilder {
             user_id,
-            username: None,
             password_hash,
         }
-    }
-
-    pub fn username(&mut self, username: String) -> &mut Self {
-        self.username = Some(username);
-        self
     }
 
     pub async fn build(self, client: &PrismaClient) -> Result<BasicAuth, QueryError> {
@@ -341,14 +288,13 @@ impl BasicAuthBuilder {
             .create(
                 prisma::user::id::equals(self.user_id.to_id_signed()),
                 self.password_hash.clone(),
-                vec![prisma::basic_auth::username::set(self.username.clone())],
+                vec![],
             )
             .exec()
             .await?;
 
         Ok(BasicAuth {
             user_id: data.user_id.try_into().unwrap(),
-            username: data.username,
             password_hash: data.password_hash,
             created_at: data.created_at.into(),
             updated_at: data.updated_at.into(),
@@ -388,7 +334,6 @@ pub struct UserBuilder<'a> {
     id_generator: &'a SnowflakeGenerator,
     client: &'a PrismaClient,
 
-    username: Option<String>,
     first_name: Option<String>,
     last_name: Option<String>,
     email_builder: EmailAddressBuilder<'a>,
@@ -401,11 +346,6 @@ pub struct UserBuilder<'a> {
 }
 
 impl<'a> UserBuilder<'a> {
-    pub fn username(&mut self, username: String) -> &mut Self {
-        self.username = Some(username);
-        self
-    }
-
     pub fn first_name(&mut self, first_name: String) -> &mut Self {
         self.first_name = Some(first_name);
         self
@@ -432,11 +372,7 @@ impl<'a> UserBuilder<'a> {
     }
 
     pub fn basic_auth(&mut self, password_hash: String) -> &mut Self {
-        let mut builder = BasicAuthBuilder::new(self.id, password_hash);
-
-        if let Some(username) = &self.username {
-            builder.username(username.clone());
-        }
+        let builder = BasicAuthBuilder::new(self.id, password_hash);
 
         self.basic_auth_builder = Some(builder);
         self
@@ -515,7 +451,6 @@ impl<'a> UserBuilder<'a> {
         let user = User {
             id: user_id,
             application_id,
-            username: self.username,
             first_name: self.first_name,
             last_name: self.last_name,
             email_address: ModelValue::Loaded(email_address),

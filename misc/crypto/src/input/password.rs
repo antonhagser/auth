@@ -1,17 +1,14 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use validator::{Validate, ValidationErrors};
 
 /// Provide password requirements configuration to organizations (e.g. min length, max length, etc.)
 ///
 /// Please do not recommend organizations to use password requirements that are too strict. It's ridiculous and annoying.
-#[derive(Debug, Clone, Copy, Validate, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
 pub struct PasswordRequirements {
     /// Minimum password length
-    #[validate(range(min = 8, max = 127))]
     pub min_length: u8,
     /// Maximum password length
-    #[validate(range(min = 8, max = 127))]
     pub max_length: u8,
 
     /// Enable strict requirements. If enabled, the password must contain at least one lowercase letter, one uppercase letter, one number, and one symbol.
@@ -26,7 +23,6 @@ pub struct PasswordRequirements {
     pub min_symbols: u8,
 
     /// Minimum zxcvbn score required for password
-    #[validate(range(min = 0, max = 4))]
     pub min_zxcvbn_score: u8,
 }
 
@@ -62,10 +58,6 @@ pub enum PasswordValidationError {
     SymbolCount(usize, usize),
     #[error("password not strong enough")]
     NotStrongEnough,
-
-    #[error("invalid password requirements")]
-    #[serde(skip)]
-    InvalidPasswordRequirements(#[from] ValidationErrors),
 }
 
 /// Validates a password according to the provided requirements.
@@ -85,13 +77,6 @@ pub fn validate_password(
     check_strength: bool,
     requirements: PasswordRequirements,
 ) -> Result<(), Vec<PasswordValidationError>> {
-    // validate requirements
-    if let Err(e) = requirements.validate() {
-        return Err(vec![PasswordValidationError::InvalidPasswordRequirements(
-            e,
-        )]);
-    }
-
     // validate password, return all errors
     let mut valid_password = true;
     let mut errors = Vec::new();

@@ -1,7 +1,4 @@
-use crypto::{
-    input::{password, username},
-    snowflake::Snowflake,
-};
+use crypto::{input::password, snowflake::Snowflake};
 use thiserror::Error;
 use tracing::info;
 
@@ -35,7 +32,6 @@ pub enum BasicRegistrationError {
 
 pub struct BasicRegistrationData {
     pub email: String,
-    pub username: Option<String>,
 
     pub first_name: Option<String>,
     pub last_name: Option<String>,
@@ -70,9 +66,6 @@ pub async fn with_basic_auth(
     // validate password
     let mut user_inputs = Vec::new();
     user_inputs.push(data.email.clone());
-    if let Some(username) = &data.username {
-        user_inputs.push(username.clone());
-    }
 
     if let Some(first_name) = &data.first_name {
         user_inputs.push(first_name.clone());
@@ -118,22 +111,6 @@ pub async fn with_basic_auth(
         data.application_id,
         data.email,
     );
-
-    // if username is provided, validate it and add it to builder (if not already taken)
-    if let Some(username) = data.username.take() {
-        if let Err(_e) = username::validate_username(&username) {
-            return Err(BasicRegistrationError::InvalidUsernameFormat);
-        }
-
-        // check if username already exists
-        match User::find_by_username(state.prisma(), &username, data.application_id, vec![]).await {
-            Ok(_) => return Err(BasicRegistrationError::UsernameAlreadyExists),
-            Err(ModelError::RecordNotFound) => (),
-            _ => return Err(BasicRegistrationError::Unknown),
-        }
-
-        user.username(username);
-    }
 
     // if first name is provided, add it to builder
     if let Some(first_name) = data.first_name.take() {

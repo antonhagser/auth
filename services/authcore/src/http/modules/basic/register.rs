@@ -1,6 +1,9 @@
-use axum::{extract::State, Form, Json};
+use axum::{
+    extract::{FromRequest, State},
+    Form, Json,
+};
 use crypto::snowflake::Snowflake;
-use hyper::StatusCode;
+use hyper::{Body, Request, StatusCode};
 use serde::Deserialize;
 
 use crate::{
@@ -12,15 +15,52 @@ use crate::{
 #[derive(Deserialize)]
 pub struct RegisterRequest {
     email: String,
-    username: Option<String>,
     password: String,
-    application_id: u64,
+    application_id: String,
+}
+
+async fn get_register_request(request: Request<Body>) -> Option<RegisterRequest> {
+    match request
+        .headers()
+        .get("content-type")
+        .and_then(|header| header.to_str().ok())
+    {
+        Some("application/x-www-form-urlencoded") => {
+            let data = Form::<RegisterRequest>::from_request(request, &())
+                .await
+                .ok()?;
+
+            Some(data.0)
+        }
+        Some("application/json") => {
+            let data = Json::<RegisterRequest>::from_request(request, &())
+                .await
+                .ok()?;
+
+            Some(data.0)
+        }
+        _ => None,
+    }
 }
 
 pub async fn route(
     State(state): State<AppState>,
-    Form(data): Form<RegisterRequest>,
+    request: Request<Body>,
 ) -> (StatusCode, Json<HTTPResponse>) {
+    // Accept multiple different ways to give the data, url encoded form data or json body
+    let data: RegisterRequest = match get_register_request(request).await {
+        Some(d) => d,
+        None => {
+            let response = HTTPResponse::error(
+                    "BadRequest",
+                    "Invalid content type, expected application/x-www-form-urlencoded or application/json".to_owned(),
+                    (),
+                );
+
+            return (StatusCode::BAD_REQUEST, Json(response));
+        }
+    };
+
     // Convert the application ID to a snowflake
     let application_id: Snowflake = if let Ok(id) = data.application_id.try_into() {
         id
@@ -37,7 +77,6 @@ pub async fn route(
     // Configure the registration data
     let data = BasicRegistrationData {
         email: data.email,
-        username: data.username,
 
         first_name: None,
         last_name: None,
@@ -46,9 +85,7 @@ pub async fn route(
         application_id,
     };
 
-    // TODO: VERY IMPORTANT
-    // ! Must check with platform service that the organization and application exists -
-    // ! otherwise the user will be created without an organization and application WHICH IS BAD
+    // Todo: Must check with platform service that the organization and application exists
 
     // Try to register the user
     if let Err(e) = register::with_basic_auth(&state, data).await {

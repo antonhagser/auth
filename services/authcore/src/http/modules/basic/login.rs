@@ -13,13 +13,12 @@ use crate::{
         token,
     },
     http::response::HTTPResponse,
-    models::user::ExistsOr,
     state::AppState,
 };
 
 #[derive(Deserialize)]
 pub struct LoginRequest {
-    email_or_username: String,
+    email: String,
     password: String,
     application_id: String,
 }
@@ -30,32 +29,38 @@ pub struct LoginResponse {
     refresh_token: String,
 }
 
-pub async fn route(
-    State(state): State<AppState>,
-    request: Request<Body>,
-) -> (StatusCode, Json<HTTPResponse>) {
-    // Accept multiple different ways to give the data, url encoded form data or json body
-    let data: LoginRequest = match request
+async fn get_login_request(request: Request<Body>) -> Option<LoginRequest> {
+    match request
         .headers()
         .get("content-type")
         .and_then(|header| header.to_str().ok())
     {
         Some("application/x-www-form-urlencoded") => {
-            // Todo: Handle errors
             let data = Form::<LoginRequest>::from_request(request, &())
                 .await
-                .unwrap();
+                .ok()?;
 
-            data.0
+            Some(data.0)
         }
         Some("application/json") => {
             let data = Json::<LoginRequest>::from_request(request, &())
                 .await
-                .unwrap();
+                .ok()?;
 
-            data.0
+            Some(data.0)
         }
-        _ => {
+        _ => None,
+    }
+}
+
+pub async fn route(
+    State(state): State<AppState>,
+    request: Request<Body>,
+) -> (StatusCode, Json<HTTPResponse>) {
+    // Accept multiple different ways to give the data, url encoded form data or json body
+    let data: LoginRequest = match get_login_request(request).await {
+        Some(d) => d,
+        None => {
             let response = HTTPResponse::error(
                 "BadRequest",
                 "Invalid content type, expected application/x-www-form-urlencoded or application/json".to_owned(),
@@ -80,14 +85,8 @@ pub async fn route(
         }
     };
 
-    let email_or_username = if data.email_or_username.contains('@') {
-        ExistsOr::Email(data.email_or_username)
-    } else {
-        ExistsOr::Username(data.email_or_username)
-    };
-
     let login_data = BasicLoginData {
-        email_or_username,
+        email: data.email,
         password: data.password,
         application_id,
     };
