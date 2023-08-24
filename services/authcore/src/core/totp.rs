@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    models::{prisma::UserTokenType, user::UserToken},
+    models::{prisma::UserTokenType, user::UserToken, PrismaClient},
     state::AppState,
 };
 
@@ -41,6 +41,34 @@ pub struct FlowTokenClaims {
     aud: String,
     device_id: Option<String>,
     session_id: Option<String>,
+    ip_address: Option<String>,
+    user_agent: Option<String>,
+}
+
+impl FlowTokenClaims {
+    pub fn token_type(&self) -> &str {
+        self.token_type.as_ref()
+    }
+
+    pub fn aud(&self) -> &str {
+        self.aud.as_ref()
+    }
+
+    pub fn device_id(&self) -> Option<&String> {
+        self.device_id.as_ref()
+    }
+
+    pub fn session_id(&self) -> Option<&String> {
+        self.session_id.as_ref()
+    }
+
+    pub fn ip_address(&self) -> Option<&String> {
+        self.ip_address.as_ref()
+    }
+
+    pub fn user_agent(&self) -> Option<&String> {
+        self.user_agent.as_ref()
+    }
 }
 
 impl Claims for FlowTokenClaims {
@@ -83,6 +111,8 @@ pub async fn new_totp_flow_token(
         aud: "authcore".to_string(),
         device_id,
         session_id,
+        ip_address: ip_address.clone(),
+        user_agent: user_agent.clone(),
     };
 
     // Generate a token
@@ -123,11 +153,43 @@ pub async fn verify_totp_flow_token(
     session_id: Option<String>,
     ip_address: Option<String>,
     user_agent: Option<String>,
-) -> Result<(), VerifyFlowTokenError> {
+) -> Result<FlowTokenClaims, VerifyFlowTokenError> {
     // Verify the token
     let claims: FlowTokenClaims =
         crypto::tokens::jsonwebtoken::JWT::verify_token(&token, state.jwt_pub_key())?;
 
+    if let Err(e) = internal_verify_totp_flow_token(
+        state.prisma(),
+        &token,
+        &claims,
+        device_id,
+        session_id,
+        ip_address,
+        user_agent,
+    )
+    .await
+    {
+        // TODO: Delete the token from the database
+        // Though remember that multiple tries are allowed, so we should only delete the token if the user has tried too many times
+        // Could be done by storing the number of tries in the token itself?
+
+        Err(e)
+    } else {
+        // TODO: Delete the token from the database
+
+        Ok(claims)
+    }
+}
+
+async fn internal_verify_totp_flow_token(
+    prisma_client: &PrismaClient,
+    token: &String,
+    claims: &FlowTokenClaims,
+    device_id: Option<String>,
+    session_id: Option<String>,
+    ip_address: Option<String>,
+    user_agent: Option<String>,
+) -> Result<(), VerifyFlowTokenError> {
     // Check if the token is expired
     if chrono::Utc::now().timestamp() as usize > claims.exp() {
         return Err(VerifyFlowTokenError::Expired);
@@ -160,21 +222,21 @@ pub async fn verify_totp_flow_token(
 
     // Check if the token contains the IP address
     if let Some(ip_address) = ip_address {
-        if claims.aud != ip_address {
+        if claims.ip_address != Some(ip_address) {
             return Err(VerifyFlowTokenError::Invalid);
         }
     }
 
     // Check if the token contains the user agent
     if let Some(user_agent) = user_agent {
-        if claims.aud != user_agent {
+        if claims.user_agent != Some(user_agent) {
             return Err(VerifyFlowTokenError::Invalid);
         }
     }
 
     // Fetch token from database and check if it exists
     let database_token = UserToken::get(
-        state.prisma(),
+        prisma_client,
         user_id,
         token.to_string(),
         UserTokenType::TotpFlow,

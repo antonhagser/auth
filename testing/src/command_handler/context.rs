@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use super::{
     command::CommandOwner,
-    commands::{login::LoginCommandOwner, register::RegisterCommandOwner},
+    commands::{login::LoginCommandOwner, register::RegisterCommandOwner, totp::TOTPCommandOwner},
 };
 
 #[derive(Clone)]
@@ -24,6 +24,11 @@ impl Context {
         commands
             .borrow_mut()
             .insert(register.get_command_name().to_string(), Box::new(register));
+
+        let totp = TOTPCommandOwner::new();
+        commands
+            .borrow_mut()
+            .insert(totp.get_command_name().to_string(), Box::new(totp));
 
         Self { commands }
     }

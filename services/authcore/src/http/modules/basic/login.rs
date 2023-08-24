@@ -4,16 +4,12 @@ use axum::{
     extract::{ConnectInfo, State},
     Json,
 };
-use chrono::{Duration, Utc};
 use hyper::{Body, Request, StatusCode};
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
 use crate::{
-    core::{
-        basic::{login, login::BasicLoginData},
-        token,
-    },
+    core::basic::login,
     http::{modules::get_request, response::HTTPResponse},
     state::AppState,
 };
@@ -68,20 +64,29 @@ pub async fn route(
         }
     };
 
-    let login_data = BasicLoginData {
-        email: data.email,
-        password: data.password,
-        application_id,
-        ip_address: addr.ip().to_string(),
-        user_agent: parts
-            .headers
-            .get("user-agent")
-            .map(|v| v.to_str().unwrap_or_default().to_owned())
-            .unwrap_or_default(),
-        totp_code: data.totp_code,
-    };
+    // Get the user agent
+    let user_agent = parts
+        .headers
+        .get("user-agent")
+        .map(|v| v.to_str().unwrap_or_default().to_owned())
+        .unwrap_or_default();
 
-    let user = match login::with_basic_auth(&state, login_data).await {
+    // Start a transaction
+    let (transaction_controller, prisma_client) =
+        state.prisma()._transaction().begin().await.unwrap();
+
+    // Call core and try to login with basic auth
+    let user = match login::with_basic_auth(
+        &prisma_client,
+        data.email,
+        data.password,
+        application_id,
+        addr.ip().to_string(),
+        user_agent,
+        data.totp_code,
+    )
+    .await
+    {
         Ok(user) => user,
         Err(e) => match e {
             login::BasicLoginError::NeedFurtherVerificationThrough2FA(user) => {
@@ -129,49 +134,26 @@ pub async fn route(
         },
     };
 
-    let (transaction, transaction_client) = state.prisma()._transaction().begin().await.unwrap();
-
     // Generate a new user refresh token
-    let refresh_token = token::new_refresh_token(
-        &transaction_client,
-        state.id_generator(),
-        user.id(),
-        Utc::now() + Duration::days(30),
-    )
-    .await;
-
-    let refresh_token = match refresh_token {
-        Ok(refresh_token) => refresh_token,
+    let res = login::create_refresh_and_access_token(&state, &prisma_client, &user).await;
+    let (refresh_token, access_token) = match res {
+        Ok(tokens) => tokens,
         Err(e) => {
-            error!("Failed to generate refresh token: {}", e);
-            let _ = transaction.rollback(transaction_client).await;
+            error!("Failed to generate refresh and access token: {}", e);
 
-            let response = HTTPResponse::error("InternalServerError", "A refresh token could not be created for the account due to an internal server error.", ());
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
-        }
-    };
+            let _ = transaction_controller.rollback(prisma_client).await;
 
-    // Generate access token
-    let access_token = token::new_access_token(
-        &state,
-        user.id(),
-        Utc::now() + Duration::hours(1),
-        refresh_token.id(),
-    );
-
-    let access_token = match access_token {
-        Ok(access_token) => access_token,
-        Err(e) => {
-            error!("Failed to generate access token: {}", e);
-            let _ = transaction.rollback(transaction_client).await;
-
-            let response = HTTPResponse::error("InternalServerError", "An access token could not be created for the account due to an internal server error.", ());
+            let response = HTTPResponse::error(
+                "InternalServerError",
+                "Failed to create the correct tokens.",
+                (),
+            );
             return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
         }
     };
 
     // Commit the transaction
-    if transaction.commit(transaction_client).await.is_err() {
+    if transaction_controller.commit(prisma_client).await.is_err() {
         let response = HTTPResponse::error("InternalServerError", "", ());
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
     }

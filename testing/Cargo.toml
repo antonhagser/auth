@@ -17,3 +17,4 @@ async-trait = "0.1.73"
 tokio = "1.31.0"
 tracing = "0.1.37"
 tracing-subscriber = "0.3.16"
+crypto = { workspace = true }

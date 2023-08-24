@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 pub use data_encoding::BASE32_NOPAD;
 use hmac::{Hmac, Mac};
 
+use rand::{distributions::Alphanumeric, Rng};
 use sha1::Sha1;
 
 /// An error type for TOTP-related errors.
@@ -162,4 +163,28 @@ pub fn verify_totp(
     }
 
     Ok(false)
+}
+
+pub fn generate_totp_secret() -> String {
+    let random_secret: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(20) // You can adjust the size as needed
+        .map(char::from)
+        .collect();
+
+    base32::encode(
+        base32::Alphabet::RFC4648 { padding: false },
+        random_secret.as_bytes(),
+    )
+}
+
+pub fn generate_backup_code() -> String {
+    let code: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .map(char::from)
+        .take(8)
+        .collect();
+
+    // Split the 8 characters into two groups of 4 with a dash in between
+    format!("{}-{}", &code[0..4], &code[4..8])
 }

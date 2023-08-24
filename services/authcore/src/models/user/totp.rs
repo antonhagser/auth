@@ -51,7 +51,7 @@ impl TOTP {
 
     pub fn verify(&self, code: String) -> bool {
         let res = crypto::totp::verify_totp(&code, self.secret.as_bytes(), self.interval, Some(1));
-        res.is_ok()
+        res.unwrap_or(false)
     }
 
     pub fn generate_backup_codes(&self) -> Vec<String> {
@@ -68,6 +68,14 @@ impl TOTP {
 
     pub fn created_at(&self) -> DateTime<Utc> {
         self.created_at
+    }
+
+    pub fn secret(&self) -> &str {
+        self.secret.as_ref()
+    }
+
+    pub fn interval(&self) -> u32 {
+        self.interval
     }
 }
 
