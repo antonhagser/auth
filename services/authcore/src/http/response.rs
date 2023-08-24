@@ -37,6 +37,8 @@ pub struct HTTPResponse {
 pub struct HTTPResponseError {
     code: String,
     message: String,
+
+    #[serde(skip_serializing_if = "serde_json::Value::is_null")]
     details: serde_json::Value,
 }
 

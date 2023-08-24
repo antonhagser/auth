@@ -69,7 +69,7 @@ impl ReplicatedApplication {
         Ok(())
     }
 
-    pub async fn find_by_id(client: &PrismaClient, id: Snowflake) -> Result<Self, ModelError> {
+    pub async fn get(client: &PrismaClient, id: Snowflake) -> Result<Self, ModelError> {
         let app = client
             .replicated_application()
             .find_first(vec![

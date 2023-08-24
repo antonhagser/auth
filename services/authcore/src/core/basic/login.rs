@@ -1,11 +1,15 @@
+use chrono::Duration;
 use crypto::snowflake::Snowflake;
 use thiserror::Error;
 
 use crate::{
+    core::token,
     models::{
         application::ReplicatedApplication,
         error::ModelError::{self, NotFound},
-        user::{User, UserWith},
+        prisma,
+        user::{User, UserToken, UserWith},
+        PrismaClient,
     },
     state::AppState,
 };
@@ -42,22 +46,6 @@ pub enum BasicLoginError {
     Unknown,
 }
 
-pub struct BasicLoginData {
-    pub email: String,
-
-    pub password: String,
-
-    pub application_id: Snowflake,
-
-    // Todo: future idea, implement device id to track devices.
-    // pub device_id: Option<Snowflake>,
-    pub ip_address: String,
-
-    pub user_agent: String,
-
-    pub totp_code: Option<String>,
-}
-
 /// Login with basic auth.
 ///
 /// # Arguments
@@ -65,26 +53,30 @@ pub struct BasicLoginData {
 /// * `state` - The app state.
 /// * `data` - The login data.
 pub async fn with_basic_auth(
-    state: &AppState,
-    data: BasicLoginData,
+    prisma_client: &PrismaClient,
+    email: String,
+    password: String,
+    application_id: Snowflake,
+    ip_address: String,
+    _: String,
+    totp_code: Option<String>,
 ) -> Result<User, BasicLoginError> {
     // Get application from database.
-    let application =
-        match ReplicatedApplication::find_by_id(state.prisma(), data.application_id).await {
-            Ok(app) => app,
-            Err(NotFound) => {
-                return Err(BasicLoginError::ApplicationDoesNotExist);
-            }
-            _ => {
-                return Err(BasicLoginError::Unknown);
-            }
-        };
+    let application = match ReplicatedApplication::get(prisma_client, application_id).await {
+        Ok(app) => app,
+        Err(NotFound) => {
+            return Err(BasicLoginError::ApplicationDoesNotExist);
+        }
+        _ => {
+            return Err(BasicLoginError::Unknown);
+        }
+    };
 
     // Get user from database.
     let mut user = {
         match crate::models::user::User::find_by_email(
-            state.prisma(),
-            data.email,
+            prisma_client,
+            email,
             application.application_id(),
             vec![UserWith::BasicAuth, UserWith::TOTP],
         )
@@ -108,8 +100,7 @@ pub async fn with_basic_auth(
     }
 
     // Check if the password is correct.
-    if crypto::password::verify_password(&data.password, auth.as_ref().unwrap().password_hash())
-        .is_err()
+    if crypto::password::verify_password(&password, auth.as_ref().unwrap().password_hash()).is_err()
     {
         return Err(BasicLoginError::WrongCredentials);
     }
@@ -126,7 +117,7 @@ pub async fn with_basic_auth(
     let totp = totp.unwrap();
 
     // If the user provided a TOTP code, check if it is correct.
-    if let Some(totp_code) = data.totp_code {
+    if let Some(totp_code) = totp_code {
         if !totp.verify(totp_code) {
             return Err(BasicLoginError::Wrong2FA);
         }
@@ -139,5 +130,58 @@ pub async fn with_basic_auth(
 
     // Check if user has 2FA through U2F enabled.
 
+    // Set the last login time and ip address.
+    prisma_client
+        .user()
+        .update(
+            prisma::user::id::equals(user.id().to_id_signed()),
+            vec![
+                prisma::user::last_login_at::set(Some(chrono::Utc::now().into())),
+                prisma::user::last_login_ip::set(Some(ip_address)),
+            ],
+        )
+        .exec()
+        .await?;
+
     Ok(user)
+}
+
+#[derive(Debug, Error)]
+pub enum RefreshAndAccessTokenError {
+    #[error("database error")]
+    QueryError(#[from] prisma_client_rust::QueryError),
+
+    #[error("paseto error")]
+    PasetoError(#[from] crypto::tokens::paseto::Error),
+
+    #[error("model error")]
+    ModelError(#[from] ModelError),
+
+    #[error("unknown error")]
+    Unknown,
+}
+
+pub async fn create_refresh_and_access_token(
+    state: &AppState,
+    prisma_client: &PrismaClient,
+    user: &User,
+) -> Result<(UserToken, String), RefreshAndAccessTokenError> {
+    // Generate a new user refresh token
+    let refresh_token = token::new_refresh_token(
+        prisma_client,
+        state.id_generator(),
+        user.id(),
+        chrono::Utc::now() + Duration::days(30),
+    )
+    .await?;
+
+    // Generate access token
+    let access_token = token::new_access_token(
+        state,
+        user.id(),
+        chrono::Utc::now() + Duration::hours(1),
+        refresh_token.id(),
+    )?;
+
+    Ok((refresh_token, access_token))
 }

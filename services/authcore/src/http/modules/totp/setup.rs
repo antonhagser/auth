@@ -4,49 +4,38 @@ use axum::{
     extract::{ConnectInfo, State},
     Json,
 };
-use crypto::snowflake::Snowflake;
+use crypto::{snowflake::Snowflake, totp};
 use hyper::{Body, Request, StatusCode};
 use serde::{Deserialize, Serialize};
+use tracing::info;
 
 use crate::{
-    core::totp,
-    http::{modules::get_request, response::HTTPResponse},
-    models::user::{
-        totp::{TOTPBackupCode, TOTP},
-        User, UserWith,
+    http::response::HTTPResponse,
+    models::{
+        prisma,
+        user::{
+            totp::{TOTPBackupCode, TOTP},
+            User, UserWith,
+        },
     },
     state::AppState,
 };
 
 #[derive(Deserialize)]
-pub struct SetupRequest {
-    token: String,
-}
+pub struct SetupRequest {}
 
 #[derive(Serialize)]
-pub struct SetupResponse {}
+pub struct SetupResponse {
+    totp_secret: String,
+    interval: u32,
+    backup_codes: Vec<String>,
+}
 
 pub async fn route(
     ConnectInfo(_addr): ConnectInfo<SocketAddr>,
     State(state): State<AppState>,
-    request: Request<Body>,
+    _request: Request<Body>,
 ) -> (StatusCode, Json<HTTPResponse>) {
-    let (parts, body) = request.into_parts();
-
-    // Accept multiple different ways to give the data, url encoded form data or json body
-    let data: SetupRequest = match get_request(&parts, body).await {
-        Some(d) => d,
-        None => {
-            let response = HTTPResponse::error(
-                "BadRequest",
-                "Invalid content type, expected application/x-www-form-urlencoded or application/json".to_owned(),
-                (),
-            );
-
-            return (StatusCode::BAD_REQUEST, Json(response));
-        }
-    };
-
     let user_id = Snowflake::try_from(34347795687145472u64).unwrap();
     let user = match User::get(state.prisma(), user_id, vec![UserWith::TOTP]).await {
         Ok(user) => user,
@@ -74,26 +63,13 @@ pub async fn route(
         );
     }
 
-    // Verify the totp flow token
-    let res = totp::verify_totp_flow_token(&state, data.token, None, None, None, None).await;
-    if res.is_err() {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(HTTPResponse::error(
-                "Unauthorized",
-                "Invalid token".to_owned(),
-                (),
-            )),
-        );
-    }
-
     // Generate a new totp secret
-    let totp_secret = crypto::tokens::string::random_token();
-    let base32_secret = crypto::totp::BASE32_NOPAD.encode(totp_secret.as_bytes());
+    let totp_secret = crypto::totp::generate_totp_secret();
     let totp_interval = 30;
 
     // Try to generate, verify that it succeeds
-    if crypto::totp::generate_totp(base32_secret.as_bytes(), totp_interval).is_err() {
+    let totp = crypto::totp::generate_totp(totp_secret.as_bytes(), totp_interval);
+    if totp.is_err() {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(HTTPResponse::error(
@@ -146,18 +122,10 @@ pub async fn route(
     };
 
     // Generate backup codes
-    // TODO: Interesting fucking issue, can't use rand thread_rng because ???
-    let backup_codes: [[u8; 6]; 10] = rand::random();
-
-    // Combine backup codes into 6 digit codes
-    let backup_codes: Vec<String> = backup_codes
-        .iter()
-        .map(|code| {
-            code.iter()
-                .map(|digit| digit.to_string())
-                .collect::<String>()
-        })
-        .collect();
+    // TODO: Interesting issue, can't use rand thread_rng in here because ???
+    let backup_codes = (0..10)
+        .map(|_| totp::generate_backup_code())
+        .collect::<Vec<_>>();
 
     // Create the backup codes
     let res = TOTPBackupCode::builder(
@@ -188,6 +156,30 @@ pub async fn route(
         );
     }
 
+    // Update user to check totp enabled flag
+    let res = state
+        .prisma()
+        .user()
+        .update(
+            prisma::user::id::equals(user.id().to_id_signed()),
+            vec![prisma::user::totp_enabled::set(true)],
+        )
+        .exec()
+        .await;
+
+    // Rollback if user update fails
+    if res.is_err() {
+        let _ = transaction_controller.rollback(prisma_client).await;
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(HTTPResponse::error(
+                "InternalServerError",
+                "Failed to setup totp".to_owned(),
+                (),
+            )),
+        );
+    }
+
     // Commit the transaction
     if (transaction_controller.commit(prisma_client).await).is_err() {
         return (
@@ -200,6 +192,18 @@ pub async fn route(
         );
     }
 
-    let response = HTTPResponse::ok(SetupResponse {});
+    info!(
+        "enabled totp for user {} with interval {}",
+        user.id().to_id_signed(),
+        totp_interval
+    );
+
+    // Return the totp secret and interval
+    let response = HTTPResponse::ok(SetupResponse {
+        totp_secret: totp.secret().to_string(),
+        interval: totp.interval(),
+        backup_codes,
+    });
+
     (StatusCode::OK, Json(response))
 }

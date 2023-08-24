@@ -45,7 +45,7 @@ impl super::authcore::auth_core_platform_server::AuthCorePlatform for Platform {
 
         // Verify data
         let application_id = if let Ok(id) = data.application_id.try_into() {
-            if ReplicatedApplication::find_by_id(self.state.prisma(), id)
+            if ReplicatedApplication::get(self.state.prisma(), id)
                 .await
                 .is_ok()
             {

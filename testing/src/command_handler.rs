@@ -145,6 +145,7 @@ pub enum Command {
     Help,
     Login,
     Register,
+    TOTP,
     Quit,
     Unknown,
 }
@@ -155,6 +156,7 @@ impl From<String> for Command {
             "help" => Command::Help,
             "login" => Command::Login,
             "register" => Command::Register,
+            "totp" => Command::TOTP,
             "quit" => Command::Quit,
             _ => Command::Unknown,
         }
