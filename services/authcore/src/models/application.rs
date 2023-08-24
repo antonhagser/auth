@@ -2,13 +2,15 @@ use chrono::{DateTime, Utc};
 use crypto::{input::password::PasswordRequirements, snowflake::Snowflake};
 use prisma_client_rust::QueryError;
 
-use super::{error::ModelError, ModelValue, PrismaClient};
+use super::{error::ModelError, PrismaClient};
 
+#[derive(Debug, Clone)]
 pub struct ReplicatedApplication {
     application_id: Snowflake,
 
     basic_auth_enabled: bool,
-    basic_auth_config: ModelValue<BasicAuthConfig>,
+
+    basic_auth_config: Option<BasicAuthConfig>,
 
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
@@ -42,7 +44,7 @@ impl ReplicatedApplication {
         let app = Self {
             application_id,
             basic_auth_enabled: app.basic_auth_enabled,
-            basic_auth_config: ModelValue::Loaded(cfg),
+            basic_auth_config: Some(cfg),
             created_at: app.created_at.into(),
             updated_at: app.updated_at.into(),
         };
@@ -78,7 +80,7 @@ impl ReplicatedApplication {
 
         match app {
             Some(app) => Ok(ReplicatedApplication::from(app)),
-            None => Err(ModelError::RecordNotFound),
+            None => Err(ModelError::NotFound),
         }
     }
 
@@ -97,7 +99,7 @@ impl ReplicatedApplication {
 
         match app {
             Some(app) => Ok(ReplicatedApplication::from(app)),
-            None => Err(ModelError::RecordNotFound),
+            None => Err(ModelError::NotFound),
         }
     }
 
@@ -109,8 +111,31 @@ impl ReplicatedApplication {
         self.basic_auth_enabled
     }
 
-    pub fn basic_auth_config(&self) -> &ModelValue<BasicAuthConfig> {
-        &self.basic_auth_config
+    pub async fn basic_auth_config(&mut self, client: &PrismaClient) -> BasicAuthConfig {
+        // If config is present, unwrap it and return
+        if let Some(cfg) = &self.basic_auth_config {
+            cfg.clone()
+        } else {
+            // Otherwise fetch config from database
+            let cfg = client
+                .basic_auth_config()
+                .find_first(vec![
+                    super::prisma::basic_auth_config::application_id::equals(
+                        self.application_id.to_id_signed(),
+                    ),
+                ])
+                .exec()
+                .await
+                .unwrap();
+
+            // Todo: verify that unwrap is the expected behavior
+            let cfg = BasicAuthConfig::from(cfg.unwrap());
+
+            // Update config
+            self.basic_auth_config = Some(cfg.clone());
+
+            cfg
+        }
     }
 
     pub fn created_at(&self) -> DateTime<Utc> {
@@ -124,15 +149,11 @@ impl ReplicatedApplication {
 
 impl From<super::prisma::replicated_application::Data> for ReplicatedApplication {
     fn from(value: super::prisma::replicated_application::Data) -> Self {
-        // Check if email address is loaded
-        let basic_auth_config = if let Some(basic_auth_config) = value.basic_auth_config {
-            if let Some(basic_auth_config) = basic_auth_config {
-                ModelValue::Loaded(BasicAuthConfig::from(*basic_auth_config))
-            } else {
-                ModelValue::NotSet
+        let basic_auth_config = match value.basic_auth_config {
+            Some(basic_auth_config) => {
+                basic_auth_config.map(|basic_auth_config| BasicAuthConfig::from(*basic_auth_config))
             }
-        } else {
-            ModelValue::NotLoaded
+            None => None,
         };
 
         Self {
@@ -145,6 +166,7 @@ impl From<super::prisma::replicated_application::Data> for ReplicatedApplication
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct BasicAuthConfig {
     application_id: Snowflake,
 

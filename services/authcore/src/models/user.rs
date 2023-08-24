@@ -2,36 +2,41 @@ use chrono::{DateTime, Utc};
 use crypto::snowflake::{Snowflake, SnowflakeGenerator};
 use prisma_client_rust::QueryError;
 
-use self::email_address::EmailAddressBuilder;
+use self::{
+    basic_auth::{BasicAuth, BasicAuthBuilder},
+    email_address::EmailAddressBuilder,
+    totp::TOTP,
+};
 
 use super::{
     error::ModelError,
-    prisma::{self, basic_auth, user::Data, PrismaClient},
-    ModelValue,
+    prisma::{self, user::Data, PrismaClient},
 };
 
 pub use email_address::EmailAddress;
 pub use external_user::ExternalUser;
 pub use token::UserToken;
 
-mod email_address;
-mod external_user;
-mod token;
+pub mod basic_auth;
+pub mod email_address;
+pub mod external_user;
+pub mod token;
+pub mod totp;
 
 #[derive(Debug, Clone)]
 pub struct User {
     id: Snowflake,
 
-    // Todo: Replace Option with a new type which implements a enum None (exists but not loaded), NotSet (not set), Some (set to a value)
     first_name: Option<String>,
     last_name: Option<String>,
 
-    email_address: ModelValue<EmailAddress>,
-
-    external_users: Vec<ExternalUser>,
+    email_address: Option<EmailAddress>,
 
     password_enabled: bool,
-    basic_auth: ModelValue<BasicAuth>,
+    basic_auth: Option<BasicAuth>,
+
+    totp_enabled: bool,
+    totp: Option<TOTP>,
 
     last_login_at: Option<DateTime<Utc>>,
     last_login_ip: Option<String>,
@@ -39,18 +44,43 @@ pub struct User {
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 
-    sessions: Vec<Session>,
-    user_metadata: Vec<UserMetadata>,
-
-    application_id: Snowflake,
+    application_id: Snowflake, // replicatedApplicationID
 }
 
 pub enum UserWith {
     EmailAddress,
     BasicAuth,
+    TOTP,
 }
 
 impl User {
+    pub async fn get<'a>(
+        client: &PrismaClient,
+        id: Snowflake,
+        with: Vec<UserWith>,
+    ) -> Result<User, ModelError> {
+        let mut user = client
+            .user()
+            .find_first(vec![prisma::user::id::equals(id.to_id_signed())]);
+
+        // Add with params (joins)
+        for w in with {
+            user = match w {
+                UserWith::EmailAddress => user.with(prisma::user::email_address::fetch()),
+                UserWith::BasicAuth => user.with(prisma::user::basic_auth::fetch()),
+                UserWith::TOTP => user.with(prisma::user::totp::fetch()),
+            };
+        }
+
+        // Execute query
+        let user = user.exec().await.map_err(ModelError::DatabaseError)?;
+
+        match user {
+            Some(user) => Ok(user.into()),
+            None => Err(ModelError::NotFound),
+        }
+    }
+
     pub async fn find_by_email<C>(
         client: &PrismaClient,
         email: C,
@@ -60,11 +90,14 @@ impl User {
     where
         C: Into<String>,
     {
+        // The way this works is by searching in the email_address table for the email address
+        // and then joining the user table to get the user data.
         let mut user_fetch = super::prisma::email_address::user::fetch();
         for with in user_with {
             user_fetch = match with {
                 UserWith::EmailAddress => user_fetch,
                 UserWith::BasicAuth => user_fetch.with(super::prisma::user::basic_auth::fetch()),
+                UserWith::TOTP => user_fetch.with(super::prisma::user::totp::fetch()),
             };
         }
 
@@ -83,17 +116,16 @@ impl User {
 
         match email_address {
             Some(mut email_address) => {
-                let user = email_address
-                    .user
-                    .take()
-                    .ok_or(ModelError::RecordNotFound)?;
-                let mut user: User = (*user).into();
+                let user = *email_address.user.take().ok_or(ModelError::NotFound)?;
+
+                // Convert to user
+                let mut user: User = user.into();
 
                 let email_address: EmailAddress = email_address.into();
-                user.email_address = ModelValue::Loaded(email_address);
+                user.email_address = Some(email_address);
                 Ok(user)
             }
-            None => Err(ModelError::RecordNotFound),
+            None => Err(ModelError::NotFound),
         }
     }
 
@@ -134,19 +166,36 @@ impl User {
         self.last_name.as_ref()
     }
 
-    pub fn email_address(&self) -> ModelValue<&EmailAddress> {
+    pub fn email_address(&self) -> Option<&EmailAddress> {
         self.email_address.as_ref()
-    }
-
-    pub fn external_users(&self) -> &[ExternalUser] {
-        self.external_users.as_ref()
     }
 
     pub fn password_enabled(&self) -> bool {
         self.password_enabled
     }
 
-    pub fn basic_auth(&self) -> ModelValue<&BasicAuth> {
+    pub async fn basic_auth(
+        &mut self,
+        try_from_server: Option<&PrismaClient>,
+    ) -> Option<&BasicAuth> {
+        if self.basic_auth.is_some() {
+            return self.basic_auth.as_ref();
+        }
+
+        if let Some(client) = try_from_server {
+            let basic_auth = client
+                .basic_auth()
+                .find_first(vec![prisma::basic_auth::user_id::equals(
+                    self.id.to_id_signed(),
+                )])
+                .exec()
+                .await
+                .unwrap()
+                .map(|data| data.into());
+
+            self.basic_auth = basic_auth;
+        }
+
         self.basic_auth.as_ref()
     }
 
@@ -166,139 +215,57 @@ impl User {
         self.updated_at
     }
 
-    pub fn sessions(&self) -> &[Session] {
-        self.sessions.as_ref()
-    }
-
-    pub fn user_metadata(&self) -> &[UserMetadata] {
-        self.user_metadata.as_ref()
-    }
-
     pub fn application_id(&self) -> Snowflake {
         self.application_id
+    }
+
+    pub fn totp_enabled(&self) -> bool {
+        self.totp_enabled
+    }
+
+    pub fn totp(&self) -> Option<&TOTP> {
+        self.totp.as_ref()
     }
 }
 
 impl From<Data> for User {
     fn from(value: Data) -> Self {
-        // Check if email address is loaded
-        let email_address = if let Some(email_address) = value.email_address {
-            if let Some(email_address) = email_address {
-                ModelValue::Loaded(EmailAddress::from(*email_address))
-            } else {
-                ModelValue::NotSet
-            }
-        } else {
-            ModelValue::NotLoaded
+        let email_address = match value.email_address {
+            Some(Some(email_address)) => Some((*email_address).into()),
+            Some(None) => None,
+            None => None,
         };
 
-        // Check if basic auth is loaded
-        let basic_auth = if let Some(basic_auth) = value.basic_auth {
-            if let Some(basic_auth) = basic_auth {
-                ModelValue::Loaded(BasicAuth::from(*basic_auth))
-            } else {
-                ModelValue::NotSet
-            }
-        } else {
-            ModelValue::NotLoaded
+        let basic_auth = match value.basic_auth {
+            Some(Some(basic_auth)) => Some((*basic_auth).into()),
+            Some(None) => None,
+            None => None,
+        };
+
+        let totp = match value.totp {
+            Some(Some(totp)) => Some((*totp).into()),
+            Some(None) => None,
+            None => None,
         };
 
         User {
+            // Parse fields that must have a value
             id: value.id.try_into().unwrap(),
             first_name: value.first_name,
             last_name: value.last_name,
-            email_address,
-            // Todo: Implement ModelValue for external users
-            external_users: vec![],
             password_enabled: value.password_enabled,
-            basic_auth,
-            last_login_at: value.last_login_at.map(|v| v.into()),
             last_login_ip: value.last_login_ip,
             created_at: value.created_at.into(),
             updated_at: value.updated_at.into(),
-            // Todo: Implement ModelValue
-            sessions: vec![],
-            // Todo: Implement ModelValue
-            user_metadata: vec![],
+            last_login_at: value.last_login_at.map(|v| v.into()),
             application_id: value.replicated_application_id.try_into().unwrap(),
+            totp_enabled: value.totp_enabled,
+
+            // Parse fields that may not have a value
+            email_address,
+            basic_auth,
+            totp,
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct BasicAuth {
-    user_id: Snowflake,
-
-    password_hash: String,
-
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
-}
-
-impl BasicAuth {
-    pub fn builder(user_id: Snowflake, password_hash: String) -> BasicAuthBuilder {
-        BasicAuthBuilder::new(user_id, password_hash)
-    }
-
-    pub fn user_id(&self) -> Snowflake {
-        self.user_id
-    }
-
-    pub fn created_at(&self) -> DateTime<Utc> {
-        self.created_at
-    }
-
-    pub fn updated_at(&self) -> DateTime<Utc> {
-        self.updated_at
-    }
-
-    pub fn password_hash(&self) -> &str {
-        self.password_hash.as_ref()
-    }
-}
-
-impl From<basic_auth::Data> for BasicAuth {
-    fn from(value: basic_auth::Data) -> Self {
-        BasicAuth {
-            user_id: value.user_id.try_into().unwrap(),
-            password_hash: value.password_hash,
-            created_at: value.created_at.into(),
-            updated_at: value.updated_at.into(),
-        }
-    }
-}
-
-pub struct BasicAuthBuilder {
-    user_id: Snowflake,
-
-    password_hash: String,
-}
-
-impl BasicAuthBuilder {
-    pub fn new(user_id: Snowflake, password_hash: String) -> Self {
-        BasicAuthBuilder {
-            user_id,
-            password_hash,
-        }
-    }
-
-    pub async fn build(self, client: &PrismaClient) -> Result<BasicAuth, QueryError> {
-        let data = client
-            .basic_auth()
-            .create(
-                prisma::user::id::equals(self.user_id.to_id_signed()),
-                self.password_hash.clone(),
-                vec![],
-            )
-            .exec()
-            .await?;
-
-        Ok(BasicAuth {
-            user_id: data.user_id.try_into().unwrap(),
-            password_hash: data.password_hash,
-            created_at: data.created_at.into(),
-            updated_at: data.updated_at.into(),
-        })
     }
 }
 
@@ -395,9 +362,10 @@ impl<'a> UserBuilder<'a> {
             user_create_params.push(prisma::user::password_enabled::set(true));
         }
 
-        let (email_address, basic_auth, user_metadata, user): (
+        // Insert user with prisma using transaction
+        let (email_address, basic_auth, _, user): (
             EmailAddress,
-            ModelValue<BasicAuth>,
+            Option<BasicAuth>,
             Vec<UserMetadata>,
             prisma::user::Data,
         ) = self
@@ -423,10 +391,9 @@ impl<'a> UserBuilder<'a> {
                     .await?;
 
                 // Insert and build basic auth
-                let basic_auth = if let Some(basic_auth_builder) = self.basic_auth_builder {
-                    ModelValue::Loaded(basic_auth_builder.build(&client).await?)
-                } else {
-                    ModelValue::NotSet
+                let basic_auth = match self.basic_auth_builder {
+                    Some(basic_auth_builder) => Some(basic_auth_builder.build(&client).await?),
+                    None => None,
                 };
 
                 let user_metadata = self.user_metadata;
@@ -453,16 +420,15 @@ impl<'a> UserBuilder<'a> {
             application_id,
             first_name: self.first_name,
             last_name: self.last_name,
-            email_address: ModelValue::Loaded(email_address),
+            email_address: Some(email_address),
             basic_auth,
-            user_metadata,
-            external_users: vec![],
             password_enabled: user.password_enabled,
             last_login_at: None,
             last_login_ip: None,
             created_at: user.created_at.into(),
             updated_at: user.updated_at.into(),
-            sessions: vec![],
+            totp_enabled: false,
+            totp: None,
         };
 
         Ok(user)

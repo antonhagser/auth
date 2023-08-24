@@ -16,9 +16,15 @@ model User {
 
     emailAddress EmailAddress?
 
-    externalUsers   ExternalUser[]
+    // Auth methods
+    externalUsers ExternalUser[]
+
+    passwordEnabled Boolean    @default(false)
     basicAuth       BasicAuth?
-    passwordEnabled Boolean        @default(false)
+
+    // 2FA methods
+    TOTPEnabled Boolean @default(false)
+    TOTP        TOTP?
 
     lastLoginAt DateTime?
     lastLoginIP String?
@@ -81,10 +87,39 @@ model BasicAuth {
     updatedAt DateTime @updatedAt
 }
 
+// TOTP contains the TOTP secret for TOTP.
+model TOTP {
+    id BigInt @id @unique
+
+    user   User   @relation(fields: [userID], references: [id], onDelete: Cascade)
+    userID BigInt @unique
+
+    secret   String
+    interval Int    @default(30)
+
+    TOTPBackupCode TOTPBackupCode[]
+
+    createdAt DateTime @default(now())
+}
+
+// TOTPBackupCode contains the backup codes for TOTP.
+model TOTPBackupCode {
+    id BigInt @id @unique
+
+    code    String
+    expired Boolean @default(false)
+
+    TOTP   TOTP   @relation(fields: [TOTPID], references: [id], onDelete: Cascade)
+    TOTPID BigInt
+
+    createdAt DateTime @default(now())
+}
+
 enum UserTokenType {
     EMAIL_VERIFICATION
     PASSWORD_RESET
     REFRESH
+    TOTP_FLOW
 }
 
 model UserToken {
@@ -95,6 +130,9 @@ model UserToken {
 
     tokenType UserTokenType
     token     String        @unique
+
+    ipAddress String?
+    userAgent String?
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
@@ -122,7 +160,7 @@ model ReplicatedApplication {
     User User[]
 
     basicAuthEnabled Boolean          @default(true)
-    basicAuthConfig  BasicAuthConfig?
+    basicAuthConfig  BasicAuthConfig? // Enforced to exist by Authcore
 
     createdAt    DateTime       @default(now())
     updatedAt    DateTime       @updatedAt

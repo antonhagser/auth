@@ -4,7 +4,7 @@ use thiserror::Error;
 use crate::{
     models::{
         application::ReplicatedApplication,
-        error::ModelError::{self, RecordNotFound},
+        error::ModelError::{self, NotFound},
         user::{User, UserWith},
     },
     state::AppState,
@@ -24,12 +24,19 @@ pub enum BasicLoginError {
     #[error("wrong credentials")]
     WrongCredentials,
 
+    /// The 2FA code is wrong.
+    #[error("wrong 2FA code")]
+    Wrong2FA,
+
     /// The account does not exist.
     #[error("account does not exist")]
     NotFound,
 
     #[error("database error")]
     QueryError(#[from] prisma_client_rust::QueryError),
+
+    #[error("user needs further verification through 2FA")]
+    NeedFurtherVerificationThrough2FA(Box<User>),
 
     #[error("unknown error")]
     Unknown,
@@ -41,6 +48,14 @@ pub struct BasicLoginData {
     pub password: String,
 
     pub application_id: Snowflake,
+
+    // Todo: future idea, implement device id to track devices.
+    // pub device_id: Option<Snowflake>,
+    pub ip_address: String,
+
+    pub user_agent: String,
+
+    pub totp_code: Option<String>,
 }
 
 /// Login with basic auth.
@@ -57,7 +72,7 @@ pub async fn with_basic_auth(
     let application =
         match ReplicatedApplication::find_by_id(state.prisma(), data.application_id).await {
             Ok(app) => app,
-            Err(RecordNotFound) => {
+            Err(NotFound) => {
                 return Err(BasicLoginError::ApplicationDoesNotExist);
             }
             _ => {
@@ -65,20 +80,18 @@ pub async fn with_basic_auth(
             }
         };
 
-    // Do not validate password due to the possibility of password requirements changing.
-
     // Get user from database.
-    let user = {
+    let mut user = {
         match crate::models::user::User::find_by_email(
             state.prisma(),
             data.email,
             application.application_id(),
-            vec![UserWith::BasicAuth],
+            vec![UserWith::BasicAuth, UserWith::TOTP],
         )
         .await
         {
             Ok(user) => user,
-            Err(ModelError::RecordNotFound) => {
+            Err(ModelError::NotFound) => {
                 return Err(BasicLoginError::NotFound);
             }
             _ => {
@@ -88,19 +101,43 @@ pub async fn with_basic_auth(
     };
 
     // Check if the user has a password.
-    if user.basic_auth().is_not_loaded() {
+    let auth = user.basic_auth(None).await;
+
+    if auth.is_none() {
         return Err(BasicLoginError::WrongCredentials);
     }
 
     // Check if the password is correct.
-    if crypto::password::verify_password(
-        &data.password,
-        user.basic_auth().as_ref().unwrap().password_hash(),
-    )
-    .is_err()
+    if crypto::password::verify_password(&data.password, auth.as_ref().unwrap().password_hash())
+        .is_err()
     {
         return Err(BasicLoginError::WrongCredentials);
     }
+
+    // Check if user has 2FA through TOTP enabled.
+    let totp = user.totp();
+
+    // If user does not have 2FA enabled, return the user.
+    if totp.is_none() {
+        return Ok(user);
+    }
+
+    // If user has 2FA enabled, check if user has 2FA through TOTP enabled.
+    let totp = totp.unwrap();
+
+    // If the user provided a TOTP code, check if it is correct.
+    if let Some(totp_code) = data.totp_code {
+        if !totp.verify(totp_code) {
+            return Err(BasicLoginError::Wrong2FA);
+        }
+    } else {
+        // If the user did not provide a TOTP code, return the user id.
+        return Err(BasicLoginError::NeedFurtherVerificationThrough2FA(
+            Box::new(user),
+        ));
+    }
+
+    // Check if user has 2FA through U2F enabled.
 
     Ok(user)
 }

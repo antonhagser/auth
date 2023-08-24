@@ -41,6 +41,9 @@ use chrono::{DateTime, Utc};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey};
 use serde::{Deserialize, Serialize};
 
+pub use jsonwebtoken::errors::{Error, ErrorKind};
+pub use rsa;
+
 /// Represents the default payload of a JWT, containing the subject (sub), issuer (iss), and expiration (exp).
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DefaultClaims {

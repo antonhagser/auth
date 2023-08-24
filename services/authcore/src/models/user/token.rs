@@ -9,12 +9,16 @@ use crate::models::{
     PrismaClient,
 };
 
+#[derive(Debug, Clone)]
 pub struct UserToken {
     id: Snowflake,
     user_id: Snowflake,
 
     token_type: UserTokenType,
     token: String,
+
+    ip_address: Option<String>,
+    user_agent: Option<String>,
 
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
@@ -35,7 +39,34 @@ impl UserToken {
             token_type,
             token,
             expires_at,
+
+            ip_address: None,
+            user_agent: None,
         }
+    }
+
+    /// Get a user token by user_id, token and token_type.
+    pub async fn get(
+        client: &PrismaClient,
+        user_id: Snowflake,
+        token: String,
+        token_type: UserTokenType,
+    ) -> Result<Self, ModelError> {
+        let data = client
+            .user_token()
+            .find_first(vec![
+                super::prisma::user_token::token::equals(token),
+                super::prisma::user_token::token_type::equals(token_type),
+                super::prisma::user_token::user_id::equals(user_id.to_id_signed()),
+            ])
+            .exec()
+            .await?;
+
+        if data.is_none() {
+            return Err(ModelError::NotFound);
+        }
+
+        Ok(data.unwrap().into())
     }
 
     /// User token ID.
@@ -72,6 +103,14 @@ impl UserToken {
     pub fn expires_at(&self) -> DateTime<Utc> {
         self.expires_at
     }
+
+    pub fn ip_address(&self) -> Option<&String> {
+        self.ip_address.as_ref()
+    }
+
+    pub fn user_agent(&self) -> Option<&String> {
+        self.user_agent.as_ref()
+    }
 }
 
 impl From<Data> for UserToken {
@@ -82,6 +121,9 @@ impl From<Data> for UserToken {
 
             token_type: data.token_type,
             token: data.token,
+
+            ip_address: data.ip_address,
+            user_agent: data.user_agent,
 
             created_at: data.created_at.into(),
             updated_at: data.updated_at.into(),
@@ -96,6 +138,9 @@ pub struct UserTokenBuilder<'a> {
     token_type: UserTokenType,
     token: String,
     expires_at: DateTime<Utc>,
+
+    ip_address: Option<String>,
+    user_agent: Option<String>,
 }
 
 impl<'a> UserTokenBuilder<'a> {
@@ -109,11 +154,24 @@ impl<'a> UserTokenBuilder<'a> {
                 self.token_type,
                 self.token,
                 self.expires_at.into(),
-                vec![],
+                vec![
+                    super::prisma::user_token::ip_address::set(self.ip_address),
+                    super::prisma::user_token::user_agent::set(self.user_agent),
+                ],
             )
             .exec()
             .await?;
 
         Ok(data.into())
+    }
+
+    pub fn ip_address(mut self, ip_address: Option<String>) -> Self {
+        self.ip_address = ip_address;
+        self
+    }
+
+    pub fn user_agent(mut self, user_agent: Option<String>) -> Self {
+        self.user_agent = user_agent;
+        self
     }
 }

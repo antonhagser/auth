@@ -251,8 +251,6 @@ impl Snowflake {
 
     /// Returns the Snowflake as a i64.
     ///
-    /// The Snowflake will be converted to a negative number if the most significant bit is set.
-    ///
     /// # Panics
     ///
     /// This function will panic if the most significant bit of the timestamp is set.

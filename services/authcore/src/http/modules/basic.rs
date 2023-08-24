@@ -2,11 +2,6 @@
 //!
 //! This module provides the functionality for traditional password-based authentication.
 //! It includes both the login and registration processes.
-//!
-//! # Modules
-//!
-//! * `login`: Handles the login process using a username/email and password.
-//! * `register`: Handles the registration process, including user creation and password storage.
 
 use axum::{routing::post, Router};
 

@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use std::{
     net::{Ipv4Addr, SocketAddr},
     sync::Arc,
@@ -54,6 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         prisma,
         id_generator,
         *SERVICE_DATA,
+        b"01234567890123456789012345678901",
         b"01234567890123456789012345678901",
     );
 

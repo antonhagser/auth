@@ -2,7 +2,7 @@
 //! The TOTP algorithm is based on the HOTP (HMAC-based One-Time Password) algorithm but uses time as the moving factor.
 
 use chrono::{DateTime, Utc};
-use data_encoding::BASE32_NOPAD;
+pub use data_encoding::BASE32_NOPAD;
 use hmac::{Hmac, Mac};
 
 use sha1::Sha1;
@@ -55,12 +55,12 @@ impl From<sha1::digest::InvalidLength> for Error {
 /// # Returns
 ///
 /// A `Result<String, totp::Error>` containing the generated TOTP or an error.
-pub fn generate_totp(secret: &[u8], interval: u64) -> Result<String, Error> {
+pub fn generate_totp(secret: &[u8], interval: u32) -> Result<String, Error> {
     let secret = BASE32_NOPAD.decode(secret)?; // Decode the secret to bytes
 
     let utc: DateTime<Utc> = Utc::now();
     let current_time = utc.timestamp() as u64;
-    let counter = current_time / interval;
+    let counter = current_time / interval as u64;
 
     generate_hotp(&secret, counter)
 }
@@ -143,14 +143,14 @@ pub fn generate_hotp(secret: &[u8], counter: u64) -> Result<String, Error> {
 pub fn verify_totp(
     input_totp: &str,
     secret: &[u8],
-    interval: u64,
+    interval: u32,
     tolerance: Option<u64>,
 ) -> Result<bool, Error> {
     let secret = BASE32_NOPAD.decode(secret)?; // Decode the secret to bytes
 
     let utc: DateTime<Utc> = Utc::now();
     let current_time = utc.timestamp() as u64;
-    let counter = current_time / interval;
+    let counter = current_time / interval as u64;
 
     let tolerance = tolerance.unwrap_or(0);
 
