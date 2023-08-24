@@ -10,6 +10,7 @@ use crate::{state::AppState, ServiceData, SERVICE_DATA};
 pub mod modules;
 pub mod response;
 
+/// The root endpoint for the HTTP server. Used for health checks.
 #[utoipa::path(
     get,
     path = "/",
@@ -95,7 +96,7 @@ pub async fn run(addr: SocketAddr, state: AppState) -> Result<(), HTTPServerErro
     tracing::info!("http listening on {}", addr);
 
     match axum::Server::bind(&addr)
-        .serve(app.into_make_service())
+        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
         .await
     {
         Err(e) => Err(HTTPServerError::ServerError(e)),

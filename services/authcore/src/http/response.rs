@@ -56,11 +56,11 @@ impl HTTPResponse {
     }
 
     /// Create a new HTTP response with error
-    pub fn error<T, E, M>(code: E, message: M, details: T) -> Self
+    pub fn error<D, C, M>(code: C, message: M, details: D) -> Self
     where
-        T: Serialize,
-        E: Into<String>,
+        C: Into<String>,
         M: Into<String>,
+        D: Serialize,
     {
         let details = serde_json::to_value(details).unwrap();
 

@@ -208,8 +208,13 @@ impl DefaultClaimsBuilder {
         self
     }
 
-    pub fn other(mut self, other: Value) -> Self {
-        self.other = Some(other);
+    pub fn other<C>(mut self, other: C) -> Self
+    where
+        C: serde::Serialize,
+    {
+        serde_json::to_value(other)
+            .map(|v| self.other = Some(v))
+            .unwrap();
         self
     }
 

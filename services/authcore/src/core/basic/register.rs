@@ -3,7 +3,7 @@ use thiserror::Error;
 use tracing::info;
 
 use crate::{
-    models::{error::ModelError, user::User, ModelValue},
+    models::{error::ModelError, user::User},
     state::AppState,
 };
 
@@ -59,7 +59,7 @@ pub async fn with_basic_auth(
     // check if email already exists
     match User::find_by_email(state.prisma(), &data.email, data.application_id, vec![]).await {
         Ok(_) => return Err(BasicRegistrationError::EmailAddressAlreadyExists),
-        Err(ModelError::RecordNotFound) => (),
+        Err(ModelError::NotFound) => (),
         _ => return Err(BasicRegistrationError::Unknown),
     }
 
@@ -77,7 +77,7 @@ pub async fn with_basic_auth(
 
     // Get the password requirements from the application
     // TODO: Introduce caching? (big problem with cache invalidation, maybe we're fine with a bit of a delay?)
-    let application =
+    let mut application =
         match crate::models::application::ReplicatedApplication::find_by_id_with_config(
             state.prisma(),
             data.application_id,
@@ -89,12 +89,10 @@ pub async fn with_basic_auth(
         };
 
     // If password requirements config is not found, use the default config
-    let password_requirements = match application.basic_auth_config() {
-        ModelValue::Loaded(basic_auth_config) => {
-            basic_auth_config.as_password_requirements_config()
-        }
-        _ => state.config().default_password_requirements(),
-    };
+    let password_requirements = application
+        .basic_auth_config(state.prisma())
+        .await
+        .as_password_requirements_config();
 
     // Validate the password
     let user_inputs: Vec<&str> = user_inputs.iter().map(|s| s.as_str()).collect();

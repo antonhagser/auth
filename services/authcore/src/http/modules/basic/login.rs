@@ -1,6 +1,8 @@
+use std::net::SocketAddr;
+
 use axum::{
-    extract::{FromRequest, State},
-    Form, Json,
+    extract::{ConnectInfo, State},
+    Json,
 };
 use chrono::{Duration, Utc};
 use hyper::{Body, Request, StatusCode};
@@ -12,53 +14,34 @@ use crate::{
         basic::{login, login::BasicLoginData},
         token,
     },
-    http::response::HTTPResponse,
+    http::{modules::get_request, response::HTTPResponse},
     state::AppState,
 };
 
 #[derive(Deserialize)]
 pub struct LoginRequest {
-    email: String,
-    password: String,
-    application_id: String,
+    pub email: String,
+    pub password: String,
+    pub application_id: String,
+
+    pub totp_code: Option<String>,
 }
 
 #[derive(Serialize)]
 pub struct LoginResponse {
-    access_token: String,
-    refresh_token: String,
-}
-
-async fn get_login_request(request: Request<Body>) -> Option<LoginRequest> {
-    match request
-        .headers()
-        .get("content-type")
-        .and_then(|header| header.to_str().ok())
-    {
-        Some("application/x-www-form-urlencoded") => {
-            let data = Form::<LoginRequest>::from_request(request, &())
-                .await
-                .ok()?;
-
-            Some(data.0)
-        }
-        Some("application/json") => {
-            let data = Json::<LoginRequest>::from_request(request, &())
-                .await
-                .ok()?;
-
-            Some(data.0)
-        }
-        _ => None,
-    }
+    pub access_token: String,
+    pub refresh_token: String,
 }
 
 pub async fn route(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<AppState>,
     request: Request<Body>,
 ) -> (StatusCode, Json<HTTPResponse>) {
+    let (parts, body) = request.into_parts();
+
     // Accept multiple different ways to give the data, url encoded form data or json body
-    let data: LoginRequest = match get_login_request(request).await {
+    let data: LoginRequest = match get_request(&parts, body).await {
         Some(d) => d,
         None => {
             let response = HTTPResponse::error(
@@ -89,16 +72,61 @@ pub async fn route(
         email: data.email,
         password: data.password,
         application_id,
+        ip_address: addr.ip().to_string(),
+        user_agent: parts
+            .headers
+            .get("user-agent")
+            .map(|v| v.to_str().unwrap_or_default().to_owned())
+            .unwrap_or_default(),
+        totp_code: data.totp_code,
     };
 
     let user = match login::with_basic_auth(&state, login_data).await {
         Ok(user) => user,
-        Err(_) => {
-            let response =
-                HTTPResponse::error("Unauthorized", "Invalid email or password".to_owned(), ());
+        Err(e) => match e {
+            login::BasicLoginError::NeedFurtherVerificationThrough2FA(user) => {
+                // Generate a TOTP flow token
+                let flow_token = crate::core::totp::new_totp_flow_token(
+                    &state,
+                    user.id(),
+                    None, // TODO: implement device ID
+                    None, // TODO: implement session ID
+                    Some(addr.ip().to_string()),
+                    Some(
+                        parts
+                            .headers
+                            .get("user-agent")
+                            .map(|v| v.to_str().unwrap_or_default().to_owned())
+                            .unwrap_or_default(),
+                    ),
+                )
+                .await;
 
-            return (StatusCode::UNAUTHORIZED, Json(response));
-        }
+                let flow_token = match flow_token {
+                    Ok(flow_token) => flow_token,
+                    Err(e) => {
+                        error!("Failed to generate TOTP flow token: {}", e);
+
+                        let response = HTTPResponse::error("InternalServerError", "A TOTP flow token could not be created for the account due to an internal server error.", ());
+                        return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
+                    }
+                };
+
+                let response = HTTPResponse::error(
+                    "NeedFurtherVerificationThrough2FA",
+                    "The user needs to verify their identity through 2FA".to_owned(),
+                    flow_token,
+                );
+
+                return (StatusCode::UNAUTHORIZED, Json(response));
+            }
+            _ => {
+                let response =
+                    HTTPResponse::error("Unauthorized", "Invalid email or password".to_owned(), ());
+
+                return (StatusCode::UNAUTHORIZED, Json(response));
+            }
+        },
     };
 
     let (transaction, transaction_client) = state.prisma()._transaction().begin().await.unwrap();

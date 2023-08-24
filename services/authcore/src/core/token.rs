@@ -3,6 +3,7 @@ use crypto::{
     snowflake::{Snowflake, SnowflakeGenerator},
     tokens::paseto::{self, DefaultClaims},
 };
+use serde::{Deserialize, Serialize};
 
 use crate::{
     models::{error::ModelError, prisma::UserTokenType, user::UserToken, PrismaClient},
@@ -27,6 +28,9 @@ pub async fn new_refresh_token(
     .build(client)
     .await
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AccessTokenClaims {}
 
 pub fn new_access_token(
     state: &AppState,

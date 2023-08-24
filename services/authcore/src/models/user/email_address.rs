@@ -60,7 +60,7 @@ impl EmailAddress {
 
         match email_address {
             Some(email_address) => Ok(email_address.into()),
-            None => Err(ModelError::RecordNotFound),
+            None => Err(ModelError::NotFound),
         }
     }
 
