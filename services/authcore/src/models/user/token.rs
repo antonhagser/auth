@@ -1,7 +1,7 @@
 use std::vec;
 
 use chrono::{DateTime, Utc};
-use crypto::snowflake::{Snowflake, SnowflakeGenerator};
+use crypto::snowflake::Snowflake;
 
 use crate::models::{
     error::ModelError,
@@ -27,14 +27,14 @@ pub struct UserToken {
 
 impl UserToken {
     pub fn builder(
-        id_generator: &SnowflakeGenerator,
+        token_id: Snowflake,
         user_id: Snowflake,
         token_type: UserTokenType,
         token: String,
         expires_at: DateTime<Utc>,
     ) -> UserTokenBuilder {
         UserTokenBuilder {
-            id_generator,
+            token_id,
             user_id,
             token_type,
             token,
@@ -49,13 +49,13 @@ impl UserToken {
     pub async fn get(
         client: &PrismaClient,
         user_id: Snowflake,
-        token: String,
+        token_id: Snowflake,
         token_type: UserTokenType,
     ) -> Result<Self, ModelError> {
         let data = client
             .user_token()
             .find_first(vec![
-                super::prisma::user_token::token::equals(token),
+                super::prisma::user_token::id::equals(token_id.to_id_signed()),
                 super::prisma::user_token::token_type::equals(token_type),
                 super::prisma::user_token::user_id::equals(user_id.to_id_signed()),
             ])
@@ -132,8 +132,8 @@ impl From<Data> for UserToken {
     }
 }
 
-pub struct UserTokenBuilder<'a> {
-    id_generator: &'a SnowflakeGenerator,
+pub struct UserTokenBuilder {
+    token_id: Snowflake,
     user_id: Snowflake,
     token_type: UserTokenType,
     token: String,
@@ -143,13 +143,12 @@ pub struct UserTokenBuilder<'a> {
     user_agent: Option<String>,
 }
 
-impl<'a> UserTokenBuilder<'a> {
+impl UserTokenBuilder {
     pub async fn build(self, client: &PrismaClient) -> Result<UserToken, ModelError> {
-        let id = self.id_generator.next_snowflake().unwrap();
         let data = client
             .user_token()
             .create(
-                id.to_id_signed(),
+                self.token_id.to_id_signed(),
                 super::prisma::user::id::equals(self.user_id.to_id_signed()),
                 self.token_type,
                 self.token,

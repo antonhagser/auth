@@ -7,7 +7,6 @@ use axum::{
 use crypto::tokens::jsonwebtoken::Claims;
 use hyper::{Body, Request, StatusCode};
 use serde::{Deserialize, Serialize};
-use tracing::info;
 
 use crate::{
     core::{basic::login, totp},
@@ -76,8 +75,7 @@ pub async fn route(
         data.token,
         None,
         None,
-        Some(addr.ip().to_string()),
-        user_agent,
+        user_agent.clone(),
     )
     .await
     {
@@ -139,8 +137,6 @@ pub async fn route(
         );
     }
 
-    info!("Verified totp flow token and user, ok to proceed");
-
     // Match totp code
     let totp = user.totp().unwrap().verify(data.totp_code);
     if !totp {
@@ -155,20 +151,27 @@ pub async fn route(
     }
 
     // Generate refresh and access token
-    let (user_token, refresh_token) =
-        match login::create_refresh_and_access_token(&state, &prisma_client, &user).await {
-            Ok(tokens) => tokens,
-            Err(_) => {
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(HTTPResponse::error(
-                        "InternalServerError",
-                        "Could not generate refresh and access token".to_owned(),
-                        (),
-                    )),
-                );
-            }
-        };
+    let (refresh_token, access_token) = match login::create_refresh_and_access_token(
+        &state,
+        &prisma_client,
+        &user,
+        Some(addr.ip().to_string()),
+        user_agent,
+    )
+    .await
+    {
+        Ok(tokens) => tokens,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(HTTPResponse::error(
+                    "InternalServerError",
+                    "Could not generate refresh and access token".to_owned(),
+                    (),
+                )),
+            );
+        }
+    };
 
     if transaction_controller.commit(prisma_client).await.is_err() {
         return (
@@ -183,8 +186,8 @@ pub async fn route(
 
     // Return the access token and refresh token to the client
     let response = VerifyResponse {
-        access_token: user_token.token().into(),
-        refresh_token,
+        access_token,
+        refresh_token: refresh_token.token().into(),
     };
 
     (StatusCode::OK, Json(HTTPResponse::ok(response)))

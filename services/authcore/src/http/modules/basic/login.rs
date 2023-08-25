@@ -68,8 +68,7 @@ pub async fn route(
     let user_agent = parts
         .headers
         .get("user-agent")
-        .map(|v| v.to_str().unwrap_or_default().to_owned())
-        .unwrap_or_default();
+        .map(|v| v.to_str().unwrap_or_default().to_owned());
 
     // Start a transaction
     let (transaction_controller, prisma_client) =
@@ -82,7 +81,6 @@ pub async fn route(
         data.password,
         application_id,
         addr.ip().to_string(),
-        user_agent,
         data.totp_code,
     )
     .await
@@ -135,7 +133,14 @@ pub async fn route(
     };
 
     // Generate a new user refresh token
-    let res = login::create_refresh_and_access_token(&state, &prisma_client, &user).await;
+    let res = login::create_refresh_and_access_token(
+        &state,
+        &prisma_client,
+        &user,
+        Some(addr.ip().to_string()),
+        user_agent,
+    )
+    .await;
     let (refresh_token, access_token) = match res {
         Ok(tokens) => tokens,
         Err(e) => {

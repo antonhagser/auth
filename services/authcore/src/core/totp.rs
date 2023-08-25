@@ -39,6 +39,7 @@ pub struct FlowTokenClaims {
     exp: usize,
     token_type: String,
     aud: String,
+    jti: Snowflake,
     device_id: Option<String>,
     session_id: Option<String>,
     ip_address: Option<String>,
@@ -102,6 +103,7 @@ pub async fn new_totp_flow_token(
     ip_address: Option<String>,
     user_agent: Option<String>,
 ) -> Result<String, GenerateFlowTokenError> {
+    let token_id = state.id_generator().next_snowflake().unwrap();
     let exp = chrono::Utc::now() + chrono::Duration::minutes(5);
     let claims = FlowTokenClaims {
         sub: user_id.to_string(),
@@ -109,6 +111,7 @@ pub async fn new_totp_flow_token(
         exp: exp.timestamp() as usize,
         token_type: "totp_flow".to_string(),
         aud: "authcore".to_string(),
+        jti: token_id,
         device_id,
         session_id,
         ip_address: ip_address.clone(),
@@ -119,17 +122,11 @@ pub async fn new_totp_flow_token(
     let token = crypto::tokens::jsonwebtoken::JWT::generate_token(claims, state.jwt_priv_key())?;
 
     // Store the token in the database
-    let token = UserToken::builder(
-        state.id_generator(),
-        user_id,
-        UserTokenType::TotpFlow,
-        token,
-        exp,
-    )
-    .ip_address(ip_address)
-    .user_agent(user_agent)
-    .build(state.prisma())
-    .await?;
+    let token = UserToken::builder(token_id, user_id, UserTokenType::TotpFlow, token, exp)
+        .ip_address(ip_address)
+        .user_agent(user_agent)
+        .build(state.prisma())
+        .await?;
 
     Ok(token.token().to_string())
 }
@@ -151,7 +148,6 @@ pub async fn verify_totp_flow_token(
     token: String,
     device_id: Option<String>,
     session_id: Option<String>,
-    ip_address: Option<String>,
     user_agent: Option<String>,
 ) -> Result<FlowTokenClaims, VerifyFlowTokenError> {
     // Verify the token
@@ -164,7 +160,6 @@ pub async fn verify_totp_flow_token(
         &claims,
         device_id,
         session_id,
-        ip_address,
         user_agent,
     )
     .await
@@ -187,7 +182,6 @@ async fn internal_verify_totp_flow_token(
     claims: &FlowTokenClaims,
     device_id: Option<String>,
     session_id: Option<String>,
-    ip_address: Option<String>,
     user_agent: Option<String>,
 ) -> Result<(), VerifyFlowTokenError> {
     // Check if the token is expired
@@ -220,13 +214,6 @@ async fn internal_verify_totp_flow_token(
         }
     }
 
-    // Check if the token contains the IP address
-    if let Some(ip_address) = ip_address {
-        if claims.ip_address != Some(ip_address) {
-            return Err(VerifyFlowTokenError::Invalid);
-        }
-    }
-
     // Check if the token contains the user agent
     if let Some(user_agent) = user_agent {
         if claims.user_agent != Some(user_agent) {
@@ -235,13 +222,8 @@ async fn internal_verify_totp_flow_token(
     }
 
     // Fetch token from database and check if it exists
-    let database_token = UserToken::get(
-        prisma_client,
-        user_id,
-        token.to_string(),
-        UserTokenType::TotpFlow,
-    )
-    .await?;
+    let database_token =
+        UserToken::get(prisma_client, user_id, claims.jti, UserTokenType::TotpFlow).await?;
 
     // Check if the token matches the one in the database
     if database_token.token() != token {
