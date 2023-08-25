@@ -25,7 +25,7 @@ pub mod backup_codes;
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/verify", post(verify::route))
-        // TODO: Place endpoints behind authentication middleware
+        // TODO: Place endpoints behind authentication middleware (using Authorization header)
         .route("/delete", post(delete::route))
         .route("/setup", post(setup::route))
         .route("/backup_codes", get(backup_codes::route))

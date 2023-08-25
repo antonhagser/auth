@@ -11,8 +11,6 @@ pub enum UsernameValidationError {
 }
 
 pub fn validate_username(username: &str) -> Result<(), Vec<UsernameValidationError>> {
-    // TODO: validate username
-
     // Must only contain alphanumeric characters or single hyphens, and cannot begin or end with a hyphen.
     // Must be between 1 and 63 characters long.
 

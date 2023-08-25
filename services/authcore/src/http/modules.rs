@@ -10,6 +10,7 @@ use serde::de::DeserializeOwned;
 use crate::state::AppState;
 
 pub mod basic;
+pub mod session;
 pub mod totp;
 
 /// Verification submodule for handling user verification.
@@ -21,7 +22,8 @@ pub fn router(state: AppState) -> axum::Router {
         .with_state(state.clone())
         .nest("/basic", basic::router(state.clone()))
         .nest("/verify", verification::router(state.clone()))
-        .nest("/totp", totp::router(state))
+        .nest("/totp", totp::router(state.clone()))
+        .nest("/session", session::router(state))
 }
 
 async fn get_request<T>(parts: &Parts, body: Body) -> Option<T>

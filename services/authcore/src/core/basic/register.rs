@@ -122,8 +122,6 @@ pub async fn with_basic_auth(
 
     // add password to builder
     let password_hash = crypto::password::hash_and_salt_password(&data.password);
-
-    // TODO: handle error
     if password_hash.is_err() {
         return Err(BasicRegistrationError::Unknown);
     }

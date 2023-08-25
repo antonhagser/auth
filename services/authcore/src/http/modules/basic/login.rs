@@ -2,8 +2,10 @@ use std::net::SocketAddr;
 
 use axum::{
     extract::{ConnectInfo, State},
+    response::IntoResponse,
     Json,
 };
+use axum_extra::extract::CookieJar;
 use hyper::{Body, Request, StatusCode};
 use serde::{Deserialize, Serialize};
 use tracing::error;
@@ -25,15 +27,15 @@ pub struct LoginRequest {
 
 #[derive(Serialize)]
 pub struct LoginResponse {
-    pub access_token: String,
-    pub refresh_token: String,
+    pub access: String,
 }
 
 pub async fn route(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<AppState>,
+    jar: CookieJar,
     request: Request<Body>,
-) -> (StatusCode, Json<HTTPResponse>) {
+) -> impl IntoResponse {
     let (parts, body) = request.into_parts();
 
     // Accept multiple different ways to give the data, url encoded form data or json body
@@ -46,7 +48,7 @@ pub async fn route(
                 (),
             );
 
-            return (StatusCode::BAD_REQUEST, Json(response));
+            return (StatusCode::BAD_REQUEST, jar, Json(response));
         }
     };
 
@@ -60,7 +62,7 @@ pub async fn route(
                 (),
             );
 
-            return (StatusCode::BAD_REQUEST, Json(response));
+            return (StatusCode::BAD_REQUEST, jar, Json(response));
         }
     };
 
@@ -111,7 +113,7 @@ pub async fn route(
                         error!("Failed to generate TOTP flow token: {}", e);
 
                         let response = HTTPResponse::error("InternalServerError", "A TOTP flow token could not be created for the account due to an internal server error.", ());
-                        return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
+                        return (StatusCode::INTERNAL_SERVER_ERROR, jar, Json(response));
                     }
                 };
 
@@ -121,13 +123,13 @@ pub async fn route(
                     flow_token,
                 );
 
-                return (StatusCode::UNAUTHORIZED, Json(response));
+                return (StatusCode::UNAUTHORIZED, jar, Json(response));
             }
             _ => {
                 let response =
                     HTTPResponse::error("Unauthorized", "Invalid email or password".to_owned(), ());
 
-                return (StatusCode::UNAUTHORIZED, Json(response));
+                return (StatusCode::UNAUTHORIZED, jar, Json(response));
             }
         },
     };
@@ -153,22 +155,27 @@ pub async fn route(
                 "Failed to create the correct tokens.",
                 (),
             );
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
+            return (StatusCode::INTERNAL_SERVER_ERROR, jar, Json(response));
         }
     };
 
     // Commit the transaction
     if transaction_controller.commit(prisma_client).await.is_err() {
         let response = HTTPResponse::error("InternalServerError", "", ());
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
+        return (StatusCode::INTERNAL_SERVER_ERROR, jar, Json(response));
     }
 
     // Return the access token and refresh token to the client
     let response = LoginResponse {
-        access_token,
-        refresh_token: refresh_token.token().into(),
+        access: access_token,
     };
 
+    // Write refresh to cookie
+    let jar = jar.add(login::create_refresh_cookie(
+        refresh_token.token().to_string(),
+        refresh_token.expires_at(),
+    ));
+
     let response = HTTPResponse::ok(response);
-    (StatusCode::OK, Json(response))
+    (StatusCode::OK, jar, Json(response))
 }

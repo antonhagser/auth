@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use crypto::snowflake::Snowflake;
+use tracing::info;
 
 use crate::models::{
     error::ModelError,
@@ -16,6 +17,8 @@ pub struct TOTP {
 
     secret: String,
     interval: u32,
+
+    totp_backup_codes: Vec<TOTPBackupCode>,
 
     created_at: DateTime<Utc>,
 }
@@ -35,7 +38,7 @@ impl TOTP {
         }
     }
 
-    pub async fn get(client: &PrismaClient, user_id: Snowflake) -> Option<Self> {
+    pub async fn get(client: &PrismaClient, user_id: Snowflake) -> Result<Self, ModelError> {
         let result = client
             .totp()
             .find_first(vec![prisma::totp::user_id::equals(user_id.to_id_signed())])
@@ -43,19 +46,55 @@ impl TOTP {
                 prisma::totp_backup_code::expired::equals(false),
             ]))
             .exec()
-            .await
-            .unwrap();
+            .await?;
 
-        result.map(|data| data.into())
+        match result {
+            Some(result) => Ok(result.into()),
+            None => Err(ModelError::NotFound),
+        }
     }
 
-    pub fn verify(&self, code: String) -> bool {
+    pub async fn verify(&self, client: &PrismaClient, code: String) -> Result<bool, ModelError> {
+        // Check against backup codes if the code contains a dash
+        if code.contains('-') {
+            let backup_code = self
+                .totp_backup_codes
+                .iter()
+                .find(|backup_code| backup_code.code() == code);
+
+            if let Some(backup_code) = backup_code {
+                if backup_code.expired() {
+                    return Ok(false);
+                }
+
+                // Expire the backup code
+                self.expire_a_backup_code(client, backup_code.id()).await?;
+
+                return Ok(true);
+            } else {
+                return Ok(false);
+            }
+        }
+
         let res = crypto::totp::verify_totp(&code, self.secret.as_bytes(), self.interval, Some(1));
-        res.unwrap_or(false)
+        Ok(res.unwrap_or(false))
     }
 
-    pub fn generate_backup_codes(&self) -> Vec<String> {
-        vec![]
+    pub async fn expire_a_backup_code(
+        &self,
+        client: &PrismaClient,
+        code_id: Snowflake,
+    ) -> Result<(), ModelError> {
+        client
+            .totp_backup_code()
+            .update(
+                prisma::totp_backup_code::id::equals(code_id.to_id_signed()),
+                vec![prisma::totp_backup_code::expired::set(true)],
+            )
+            .exec()
+            .await?;
+
+        Ok(())
     }
 
     pub fn id(&self) -> Snowflake {
@@ -81,12 +120,23 @@ impl TOTP {
 
 impl From<prisma::totp::Data> for TOTP {
     fn from(value: prisma::totp::Data) -> Self {
+        info!("TOTP: {:?}", value);
+
+        let totp_backup_codes = value
+            .totp_backup_code
+            .unwrap_or(Vec::new())
+            .into_iter()
+            .map(|code| code.into())
+            .collect();
+
         Self {
             id: value.id.try_into().unwrap(),
             user_id: value.user_id.try_into().unwrap(),
 
             secret: value.secret,
             interval: value.interval as u32,
+
+            totp_backup_codes,
 
             created_at: value.created_at.into(),
         }

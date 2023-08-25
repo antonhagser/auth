@@ -16,7 +16,7 @@ use serde::Serialize;
 /// ```
 #[derive(Debug, Serialize)]
 pub struct HTTPResponse {
-    success: bool,
+    status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     data: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -51,7 +51,7 @@ impl HTTPResponse {
         let data = serde_json::to_value(data).unwrap();
 
         Self {
-            success: true,
+            status: "success".into(),
             data: Some(data),
             error: None,
         }
@@ -67,7 +67,7 @@ impl HTTPResponse {
         let details = serde_json::to_value(details).unwrap();
 
         Self {
-            success: false,
+            status: "error".into(),
             data: None,
             error: Some(HTTPResponseError {
                 code: code.into(),
@@ -80,7 +80,7 @@ impl HTTPResponse {
     // Empty
     pub fn empty() -> Self {
         Self {
-            success: true,
+            status: "success".into(),
             data: None,
             error: None,
         }

@@ -1,12 +1,13 @@
-use chrono::Duration;
+use axum_extra::extract::cookie::{Cookie, SameSite};
+use chrono::{DateTime, Duration, Utc};
 use crypto::snowflake::Snowflake;
 use thiserror::Error;
 
 use crate::{
-    core::token,
+    core::token::{self, RefreshTokenError},
     models::{
         application::ReplicatedApplication,
-        error::ModelError::{self, NotFound},
+        error::ModelError::{self},
         prisma,
         user::{User, UserToken, UserWith},
         PrismaClient,
@@ -63,7 +64,7 @@ pub async fn with_basic_auth(
     // Get application from database.
     let application = match ReplicatedApplication::get(prisma_client, application_id).await {
         Ok(app) => app,
-        Err(NotFound) => {
+        Err(ModelError::NotFound) => {
             return Err(BasicLoginError::ApplicationDoesNotExist);
         }
         _ => {
@@ -117,7 +118,8 @@ pub async fn with_basic_auth(
 
     // If the user provided a TOTP code, check if it is correct.
     if let Some(totp_code) = totp_code {
-        if !totp.verify(totp_code) {
+        let totp_result = totp.verify(prisma_client, totp_code).await;
+        if totp_result.is_err() || !totp_result.unwrap() {
             return Err(BasicLoginError::Wrong2FA);
         }
     } else {
@@ -145,32 +147,17 @@ pub async fn with_basic_auth(
     Ok(user)
 }
 
-#[derive(Debug, Error)]
-pub enum RefreshAndAccessTokenError {
-    #[error("database error")]
-    QueryError(#[from] prisma_client_rust::QueryError),
-
-    #[error("paseto error")]
-    PasetoError(#[from] crypto::tokens::paseto::Error),
-
-    #[error("model error")]
-    ModelError(#[from] ModelError),
-
-    #[error("unknown error")]
-    Unknown,
-}
-
 pub async fn create_refresh_and_access_token(
     state: &AppState,
     prisma_client: &PrismaClient,
     user: &User,
     ip_address: Option<String>,
     user_agent: Option<String>,
-) -> Result<(UserToken, String), RefreshAndAccessTokenError> {
+) -> Result<(UserToken, String), RefreshTokenError> {
     // Generate a new user refresh token
     let refresh_token = token::new_refresh_token(
+        state,
         prisma_client,
-        state.id_generator(),
         user.id(),
         chrono::Utc::now() + Duration::days(30),
         ip_address,
@@ -187,4 +174,16 @@ pub async fn create_refresh_and_access_token(
     )?;
 
     Ok((refresh_token, access_token))
+}
+
+pub fn create_refresh_cookie<'a>(token: String, expire: DateTime<Utc>) -> Cookie<'a> {
+    let expiration_time = time::OffsetDateTime::from_unix_timestamp(expire.timestamp()).unwrap();
+
+    Cookie::build("refresh", token)
+        .secure(false) // TODO: set to true
+        .http_only(true)
+        .expires(expiration_time)
+        .path("/")
+        .same_site(SameSite::Strict)
+        .finish()
 }
