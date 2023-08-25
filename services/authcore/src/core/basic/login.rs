@@ -58,7 +58,6 @@ pub async fn with_basic_auth(
     password: String,
     application_id: Snowflake,
     ip_address: String,
-    _: String,
     totp_code: Option<String>,
 ) -> Result<User, BasicLoginError> {
     // Get application from database.
@@ -165,6 +164,8 @@ pub async fn create_refresh_and_access_token(
     state: &AppState,
     prisma_client: &PrismaClient,
     user: &User,
+    ip_address: Option<String>,
+    user_agent: Option<String>,
 ) -> Result<(UserToken, String), RefreshAndAccessTokenError> {
     // Generate a new user refresh token
     let refresh_token = token::new_refresh_token(
@@ -172,6 +173,8 @@ pub async fn create_refresh_and_access_token(
         state.id_generator(),
         user.id(),
         chrono::Utc::now() + Duration::days(30),
+        ip_address,
+        user_agent,
     )
     .await?;
 

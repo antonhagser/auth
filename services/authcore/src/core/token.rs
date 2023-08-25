@@ -15,16 +15,20 @@ pub async fn new_refresh_token(
     id_generator: &SnowflakeGenerator,
     user_id: Snowflake,
     expires_at: DateTime<Utc>,
+    ip_address: Option<String>,
+    user_agent: Option<String>,
 ) -> Result<UserToken, ModelError> {
     let token = crypto::tokens::string::random_token();
 
     UserToken::builder(
-        id_generator,
+        id_generator.next_snowflake().unwrap(),
         user_id,
         UserTokenType::Refresh,
         token,
         expires_at,
     )
+    .ip_address(ip_address)
+    .user_agent(user_agent)
     .build(client)
     .await
 }
