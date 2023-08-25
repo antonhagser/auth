@@ -212,9 +212,7 @@ impl DefaultClaimsBuilder {
     where
         C: serde::Serialize,
     {
-        serde_json::to_value(other)
-            .map(|v| self.other = Some(v))
-            .unwrap();
+        self.other = Some(serde_json::to_value(other).unwrap());
         self
     }
 
@@ -363,6 +361,8 @@ where
 
     // Parse the other claims
     if let Some(other_claims) = claims.other.take() {
+        println!("Other claims: {:?}", other_claims);
+
         let other_claims: C = serde_json::from_value(other_claims)?;
         let mut claims: OwnedClaims<C> = claims.into();
         claims.other = Some(other_claims);

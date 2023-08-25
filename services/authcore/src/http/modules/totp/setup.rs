@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, str::FromStr};
 
 use axum::{
     extract::{ConnectInfo, State},
@@ -6,10 +6,11 @@ use axum::{
 };
 use crypto::{snowflake::Snowflake, totp};
 use hyper::{Body, Request, StatusCode};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tracing::info;
 
 use crate::{
+    core::token,
     http::response::HTTPResponse,
     models::{
         prisma,
@@ -21,9 +22,6 @@ use crate::{
     state::AppState,
 };
 
-#[derive(Deserialize)]
-pub struct SetupRequest {}
-
 #[derive(Serialize)]
 pub struct SetupResponse {
     totp_secret: String,
@@ -34,10 +32,65 @@ pub struct SetupResponse {
 pub async fn route(
     ConnectInfo(_addr): ConnectInfo<SocketAddr>,
     State(state): State<AppState>,
-    _request: Request<Body>,
+    request: Request<Body>,
 ) -> (StatusCode, Json<HTTPResponse>) {
-    let user_id = Snowflake::try_from(34347795687145472u64).unwrap();
-    let user = match User::get(state.prisma(), user_id, vec![UserWith::TOTP]).await {
+    // Get authorization header
+    // ! Temporary till middleware is implemented
+    let auth = match request.headers().get("Authorization") {
+        Some(auth) => auth,
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(HTTPResponse::error(
+                    "Unauthorized",
+                    "Missing authorization header".to_owned(),
+                    (),
+                )),
+            );
+        }
+    }
+    .to_str()
+    .unwrap();
+
+    // Parse the authorization header
+    let auth = match auth.split(' ').collect::<Vec<_>>().as_slice() {
+        ["Bearer", token] => token,
+        _ => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(HTTPResponse::error(
+                    "Unauthorized",
+                    "Invalid authorization header".to_owned(),
+                    (),
+                )),
+            );
+        }
+    }
+    .to_owned();
+
+    // Verify the access token
+    let access_token = token::verify_access_token(&state, auth);
+    let access_token = match access_token {
+        Ok(access_token) => access_token,
+        Err(_) => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(HTTPResponse::error(
+                    "Unauthorized",
+                    "Invalid access token".to_owned(),
+                    (),
+                )),
+            );
+        }
+    };
+
+    let user = match User::get(
+        state.prisma(),
+        Snowflake::from_str(access_token.subject().unwrap()).unwrap(),
+        vec![UserWith::TOTP],
+    )
+    .await
+    {
         Ok(user) => user,
         Err(_) => {
             return (
@@ -122,7 +175,6 @@ pub async fn route(
     };
 
     // Generate backup codes
-    // TODO: Interesting issue, can't use rand thread_rng in here because ???
     let backup_codes = (0..10)
         .map(|_| totp::generate_backup_code())
         .collect::<Vec<_>>();

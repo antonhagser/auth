@@ -68,7 +68,11 @@ impl User {
             user = match w {
                 UserWith::EmailAddress => user.with(prisma::user::email_address::fetch()),
                 UserWith::BasicAuth => user.with(prisma::user::basic_auth::fetch()),
-                UserWith::TOTP => user.with(prisma::user::totp::fetch()),
+                UserWith::TOTP => user.with(prisma::user::totp::fetch().with(
+                    prisma::totp::totp_backup_code::fetch(vec![
+                        prisma::totp_backup_code::expired::equals(false),
+                    ]),
+                )),
             };
         }
 

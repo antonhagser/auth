@@ -85,8 +85,6 @@ pub async fn route(
         application_id,
     };
 
-    // Todo: Must check with platform service that the organization and application exists
-
     // Try to register the user
     if let Err(e) = register::with_basic_auth(&state, data).await {
         tracing::error!("registration error: {:#?}", e);

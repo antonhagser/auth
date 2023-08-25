@@ -2,15 +2,20 @@ use std::net::SocketAddr;
 
 use axum::{
     extract::{ConnectInfo, State},
+    response::IntoResponse,
     Json,
 };
+use axum_extra::extract::CookieJar;
 use crypto::tokens::jsonwebtoken::Claims;
 use hyper::{Body, Request, StatusCode};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::{
     core::{basic::login, totp},
-    http::{modules::get_request, response::HTTPResponse},
+    http::{
+        modules::{basic::login::LoginResponse, get_request},
+        response::HTTPResponse,
+    },
     state::AppState,
 };
 
@@ -20,17 +25,12 @@ pub struct VerifyRequest {
     totp_code: String,
 }
 
-#[derive(Serialize)]
-pub struct VerifyResponse {
-    access_token: String,
-    refresh_token: String,
-}
-
 pub async fn route(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<AppState>,
+    jar: CookieJar,
     request: Request<Body>,
-) -> (StatusCode, Json<HTTPResponse>) {
+) -> impl IntoResponse {
     let (parts, body) = request.into_parts();
 
     // Accept multiple different ways to give the data, url encoded form data or json body
@@ -43,11 +43,22 @@ pub async fn route(
                 (),
             );
 
-            return (StatusCode::BAD_REQUEST, Json(response));
+            return (StatusCode::BAD_REQUEST, jar, Json(response));
         }
     };
 
-    // Verify the totp flow token
+    // Check length of totp code
+    if data.totp_code.len() < 6 || data.totp_code.len() > 9 {
+        let response = HTTPResponse::error(
+            "BadRequest",
+            "Invalid totp code, expected 6 digits or 9 characters for backup code".to_owned(),
+            (),
+        );
+
+        return (StatusCode::BAD_REQUEST, jar, Json(response));
+    }
+
+    // Get user agent (used to verify totp flow token)
     let user_agent = parts
         .headers
         .get("user-agent")
@@ -60,6 +71,7 @@ pub async fn route(
         Err(_) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
+                jar,
                 Json(HTTPResponse::error(
                     "InternalServerError",
                     "Could not verify totp".to_owned(),
@@ -84,6 +96,7 @@ pub async fn route(
             totp::VerifyFlowTokenError::Expired => {
                 return (
                     StatusCode::UNAUTHORIZED,
+                    jar,
                     Json(HTTPResponse::error(
                         "Expired",
                         "TOTP flow token is expired".to_owned(),
@@ -94,6 +107,7 @@ pub async fn route(
             _ => {
                 return (
                     StatusCode::UNAUTHORIZED,
+                    jar,
                     Json(HTTPResponse::error(
                         "Invalid",
                         "TOTP flow token is invalid".to_owned(),
@@ -116,6 +130,7 @@ pub async fn route(
         Err(_) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
+                jar,
                 Json(HTTPResponse::error(
                     "InternalServerError",
                     "Could not verify totp".to_owned(),
@@ -129,6 +144,7 @@ pub async fn route(
     if user.totp().is_none() {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
+            jar,
             Json(HTTPResponse::error(
                 "InternalServerError",
                 "Could not verify totp".to_owned(),
@@ -137,11 +153,14 @@ pub async fn route(
         );
     }
 
+    let totp = user.totp().take().unwrap();
+
     // Match totp code
-    let totp = user.totp().unwrap().verify(data.totp_code);
-    if !totp {
+    let totp_result = totp.verify(&prisma_client, data.totp_code).await;
+    if totp_result.is_err() || !totp_result.unwrap() {
         return (
             StatusCode::UNAUTHORIZED,
+            jar,
             Json(HTTPResponse::error(
                 "Unauthorized",
                 "Invalid totp code".to_owned(),
@@ -164,6 +183,7 @@ pub async fn route(
         Err(_) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
+                jar,
                 Json(HTTPResponse::error(
                     "InternalServerError",
                     "Could not generate refresh and access token".to_owned(),
@@ -176,6 +196,7 @@ pub async fn route(
     if transaction_controller.commit(prisma_client).await.is_err() {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
+            jar,
             Json(HTTPResponse::error(
                 "InternalServerError",
                 "Could not verify totp".to_owned(),
@@ -185,10 +206,16 @@ pub async fn route(
     }
 
     // Return the access token and refresh token to the client
-    let response = VerifyResponse {
-        access_token,
-        refresh_token: refresh_token.token().into(),
+    let response = LoginResponse {
+        access: access_token,
     };
 
-    (StatusCode::OK, Json(HTTPResponse::ok(response)))
+    // Write refresh to cookie
+    let jar = jar.add(login::create_refresh_cookie(
+        refresh_token.token().to_string(),
+        refresh_token.expires_at(),
+    ));
+
+    let response = HTTPResponse::ok(response);
+    (StatusCode::OK, jar, Json(response))
 }
