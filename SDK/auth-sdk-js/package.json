@@ -1,0 +1,20 @@
+{
+    "name": "auth-sdk-js",
+    "version": "0.1.0",
+    "description": "SDK for auth",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "author": "",
+    "license": "",
+    "devDependencies": {
+        "@types/node": "^20.5.6",
+        "@types/react": "^18.2.21",
+        "typescript": "^5.2.2"
+    },
+    "peerDependency": {
+        "react": "^18.2.0"
+    }
+}
