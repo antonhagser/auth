@@ -4,18 +4,17 @@ A secure and efficient authentication and authorization service, providing user 
 
 ## Planned features
 
--   User registration and login
--   Email and SMS verification
--   Password reset and update
--   OAuth2/OpenID Connect with third-party providers (Google, Facebook, Twitter)
--   Role-based access control
--   User management endpoints for admins (list, create, update, delete, invite users)
--   Account settings management for authenticated users
--   Two-factor authentication (2FA) support
--   Rate limiting and request throttling for API endpoints
--   Integration with popular log management and monitoring solutions
--   Enhanced user profile management, including profile picture upload and retrieval
--   Implementing WebAuthn for passwordless authentication
+-   [x] User registration and login
+-   [ ] Email and SMS verification
+-   [x] Password reset and update
+-   [ ] OAuth2/OpenID Connect with third-party providers (Google, Facebook, Twitter)
+-   [ ] Role-based access control
+-   [x] User management endpoints for admins (list, create, update, delete, invite users)
+-   [x] Account settings management for authenticated users
+-   [x] Two-factor authentication (2FA) support
+-   [ ] Rate limiting and request throttling for API endpoints
+-   [ ] Integration with popular log management and monitoring solutions
+-   [ ] Implementing WebAuthn for passwordless authentication
 
 ## Commit Guidelines
 
