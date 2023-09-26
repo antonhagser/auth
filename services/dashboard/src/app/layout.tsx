@@ -1,7 +1,7 @@
+import { AuthProvider } from "auth-sdk-js";
 import "./globals.css";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { AuthProvider } from 'auth-sdk-js';
 
 const inter = Inter({ subsets: ["latin"] });
 

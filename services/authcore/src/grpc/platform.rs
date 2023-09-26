@@ -9,26 +9,26 @@ use crate::{
 
 use super::authcore::{
     AddApplicationRequest, AddApplicationResponse, DeleteApplicationRequest,
-    DeleteApplicationResponse, GetAuthCoreVersionRequest, GetAuthCoreVersionResponse,
+    DeleteApplicationResponse, GetVersionRequest, GetVersionResponse,
 };
 
-pub struct Platform {
+pub struct PlatformServer {
     state: AppState,
 }
 
-impl Platform {
+impl PlatformServer {
     pub fn new(state: AppState) -> Self {
         Self { state }
     }
 }
 
 #[tonic::async_trait]
-impl super::authcore::auth_core_platform_server::AuthCorePlatform for Platform {
-    async fn get_auth_core_version(
+impl super::authcore::platform_server::Platform for PlatformServer {
+    async fn get_version(
         &self,
-        _request: tonic::Request<GetAuthCoreVersionRequest>,
-    ) -> Result<tonic::Response<GetAuthCoreVersionResponse>, tonic::Status> {
-        let response = GetAuthCoreVersionResponse {
+        _request: tonic::Request<GetVersionRequest>,
+    ) -> Result<tonic::Response<GetVersionResponse>, tonic::Status> {
+        let response = GetVersionResponse {
             version: self.state.service_data().version.into(),
         };
 

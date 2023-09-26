@@ -5,10 +5,20 @@ use axum::{
     Json,
 };
 use axum_extra::extract::CookieJar;
+use crypto::snowflake::Snowflake;
 use hyper::{Body, Request, StatusCode};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use crate::{core::token, http::response::HTTPResponse, state::AppState};
+use crate::{
+    core::token::{self, get_refresh_cookie},
+    http::{modules::get_request, response::HTTPResponse},
+    state::AppState,
+};
+
+#[derive(Deserialize)]
+pub struct RefreshRequest {
+    application_id: Snowflake,
+}
 
 #[derive(Serialize)]
 pub struct RefreshResponse {
@@ -19,10 +29,26 @@ pub async fn route(
     ConnectInfo(_addr): ConnectInfo<SocketAddr>,
     State(state): State<AppState>,
     jar: CookieJar,
-    _request: Request<Body>,
+    request: Request<Body>,
 ) -> (StatusCode, Json<HTTPResponse>) {
+    let (parts, body) = request.into_parts();
+
+    // Accept multiple different ways to give the data, url encoded form data or json body
+    let data: RefreshRequest = match get_request(&parts, body).await {
+        Some(d) => d,
+        None => {
+            let response = HTTPResponse::error(
+                "BadRequest",
+                "Invalid content type, expected application/x-www-form-urlencoded or application/json".to_owned(),
+                (),
+            );
+
+            return (StatusCode::BAD_REQUEST, Json(response));
+        }
+    };
+
     // Get refresh token from cookie
-    let refresh = jar.get("refresh");
+    let refresh = get_refresh_cookie(&jar, data.application_id);
     let token = match refresh {
         Some(refresh) => {
             // Fetch refresh token from database
