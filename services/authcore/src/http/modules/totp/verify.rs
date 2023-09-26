@@ -11,7 +11,7 @@ use hyper::{Body, Request, StatusCode};
 use serde::Deserialize;
 
 use crate::{
-    core::{basic::login, totp},
+    core::{basic::login, token, totp},
     http::{
         modules::{basic::login::LoginResponse, get_request},
         response::HTTPResponse,
@@ -211,9 +211,10 @@ pub async fn route(
     };
 
     // Write refresh to cookie
-    let jar = jar.add(login::create_refresh_cookie(
+    let jar = jar.add(token::create_refresh_cookie(
         refresh_token.token().to_string(),
         refresh_token.expires_at(),
+        user.application_id(),
     ));
 
     let response = HTTPResponse::ok(response);

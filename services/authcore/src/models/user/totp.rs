@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use crypto::snowflake::Snowflake;
-use tracing::info;
 
 use crate::models::{
     error::ModelError,
@@ -120,8 +119,6 @@ impl TOTP {
 
 impl From<prisma::totp::Data> for TOTP {
     fn from(value: prisma::totp::Data) -> Self {
-        info!("TOTP: {:?}", value);
-
         let totp_backup_codes = value
             .totp_backup_code
             .unwrap_or(Vec::new())

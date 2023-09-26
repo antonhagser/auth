@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package authcore.auth.basic;
+
+message RegisterRequest {
+    string email          = 3;
+    string password       = 2;
+    string application_id = 4;
+}
+
+message RegisterResponse {
+    string user_id = 1;
+}
+
+enum ErrorCode {
+    EmailFormat             = 0;
+    PasswordFormat          = 1;
+    AlreadyExists           = 2;
+    ApplicationDoesNotExist = 3;
+    InternalServerError     = 4;
+}
+
+service BasicAuth {
+    rpc Register(RegisterRequest) returns (RegisterResponse);
+}

@@ -1,5 +1,4 @@
-use axum_extra::extract::cookie::{Cookie, SameSite};
-use chrono::{DateTime, Duration, Utc};
+use chrono::Duration;
 use crypto::snowflake::Snowflake;
 use thiserror::Error;
 
@@ -59,7 +58,6 @@ pub async fn with_basic_auth(
     password: String,
     application_id: Snowflake,
     ip_address: String,
-    totp_code: Option<String>,
 ) -> Result<User, BasicLoginError> {
     // Get application from database.
     let application = match ReplicatedApplication::get(prisma_client, application_id).await {
@@ -105,33 +103,13 @@ pub async fn with_basic_auth(
         return Err(BasicLoginError::WrongCredentials);
     }
 
-    // Check if user has 2FA through TOTP enabled.
-    let totp = user.totp();
-
     // If user does not have 2FA enabled, return the user.
-    if totp.is_none() {
-        return Ok(user);
-    }
-
-    // If user has 2FA enabled, check if user has 2FA through TOTP enabled.
-    let totp = totp.unwrap();
-
-    // If the user provided a TOTP code, check if it is correct.
-    if let Some(totp_code) = totp_code {
-        let totp_result = totp.verify(prisma_client, totp_code).await;
-        if totp_result.is_err() || !totp_result.unwrap() {
-            return Err(BasicLoginError::Wrong2FA);
-        }
-    } else {
-        // If the user did not provide a TOTP code, return the user id.
+    if user.totp().is_some() {
         return Err(BasicLoginError::NeedFurtherVerificationThrough2FA(
             Box::new(user),
         ));
     }
 
-    // Check if user has 2FA through U2F enabled.
-
-    // Set the last login time and ip address.
     prisma_client
         .user()
         .update(
@@ -174,16 +152,4 @@ pub async fn create_refresh_and_access_token(
     )?;
 
     Ok((refresh_token, access_token))
-}
-
-pub fn create_refresh_cookie<'a>(token: String, expire: DateTime<Utc>) -> Cookie<'a> {
-    let expiration_time = time::OffsetDateTime::from_unix_timestamp(expire.timestamp()).unwrap();
-
-    Cookie::build("refresh", token)
-        .secure(false) // TODO: set to true
-        .http_only(true)
-        .expires(expiration_time)
-        .path("/")
-        .same_site(SameSite::Strict)
-        .finish()
 }

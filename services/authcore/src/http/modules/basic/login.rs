@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use tracing::error;
 
 use crate::{
-    core::basic::login,
+    core::{basic::login, token},
     http::{modules::get_request, response::HTTPResponse},
     state::AppState,
 };
@@ -21,8 +21,6 @@ pub struct LoginRequest {
     pub email: String,
     pub password: String,
     pub application_id: String,
-
-    pub totp_code: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -83,7 +81,6 @@ pub async fn route(
         data.password,
         application_id,
         addr.ip().to_string(),
-        data.totp_code,
     )
     .await
     {
@@ -171,9 +168,10 @@ pub async fn route(
     };
 
     // Write refresh to cookie
-    let jar = jar.add(login::create_refresh_cookie(
+    let jar = jar.add(token::create_refresh_cookie(
         refresh_token.token().to_string(),
         refresh_token.expires_at(),
+        application_id,
     ));
 
     let response = HTTPResponse::ok(response);

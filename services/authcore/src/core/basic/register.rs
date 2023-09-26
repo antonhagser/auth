@@ -10,24 +10,19 @@ use crate::{
 #[derive(Debug, Error)]
 pub enum BasicRegistrationError {
     #[error("invalid email address")]
-    InvalidEmailAddressFormat,
-    #[error("email address already exists")]
-    EmailAddressAlreadyExists,
+    EmailFormat,
+
     #[error("invalid password")]
-    InvalidPassword(Vec<password::PasswordValidationError>),
-    #[error("invalid username")]
-    InvalidUsernameFormat,
-    #[error("username already exists")]
-    UsernameAlreadyExists,
+    PasswordFormat(Vec<password::PasswordValidationError>),
+
+    #[error("email address already exists")]
+    AlreadyExists,
 
     #[error("application does not exist")]
     ApplicationDoesNotExist,
 
-    #[error("database error")]
-    QueryError(#[from] prisma_client_rust::QueryError),
-
-    #[error("unknown error")]
-    Unknown,
+    #[error("internal server error")]
+    InternalServerError,
 }
 
 pub struct BasicRegistrationData {
@@ -50,17 +45,17 @@ pub struct BasicRegistrationData {
 pub async fn with_basic_auth(
     state: &AppState,
     mut data: BasicRegistrationData,
-) -> Result<(), BasicRegistrationError> {
+) -> Result<User, BasicRegistrationError> {
     // validate email
     if !crypto::input::email::validate_email(&data.email) {
-        return Err(BasicRegistrationError::InvalidEmailAddressFormat);
+        return Err(BasicRegistrationError::EmailFormat);
     }
 
     // check if email already exists
     match User::find_by_email(state.prisma(), &data.email, data.application_id, vec![]).await {
-        Ok(_) => return Err(BasicRegistrationError::EmailAddressAlreadyExists),
+        Ok(_) => return Err(BasicRegistrationError::AlreadyExists),
         Err(ModelError::NotFound) => (),
-        _ => return Err(BasicRegistrationError::Unknown),
+        _ => return Err(BasicRegistrationError::InternalServerError),
     }
 
     // validate password
@@ -99,7 +94,7 @@ pub async fn with_basic_auth(
     if let Err(e) =
         password::validate_password(&data.password, &user_inputs, true, password_requirements)
     {
-        return Err(BasicRegistrationError::InvalidPassword(e));
+        return Err(BasicRegistrationError::PasswordFormat(e));
     }
 
     // create user builder
@@ -123,7 +118,7 @@ pub async fn with_basic_auth(
     // add password to builder
     let password_hash = crypto::password::hash_and_salt_password(&data.password);
     if password_hash.is_err() {
-        return Err(BasicRegistrationError::Unknown);
+        return Err(BasicRegistrationError::InternalServerError);
     }
 
     // Set the password hash
@@ -138,12 +133,12 @@ pub async fn with_basic_auth(
                 return Err(BasicRegistrationError::ApplicationDoesNotExist);
             }
 
-            return Err(BasicRegistrationError::QueryError(e));
+            return Err(BasicRegistrationError::InternalServerError);
         }
-        _ => return Err(BasicRegistrationError::Unknown),
+        _ => return Err(BasicRegistrationError::InternalServerError),
     };
 
     info!("user created: {:#?}", user);
 
-    Ok(())
+    Ok(user)
 }

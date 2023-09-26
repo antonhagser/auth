@@ -5,7 +5,10 @@ use std::net::SocketAddr;
 
 use crate::AppState;
 
+mod auth;
+mod error;
 mod platform;
+mod session;
 
 /// Tonic-generated gRPC bindings
 pub mod authcore {
@@ -33,12 +36,20 @@ pub enum GrpcServerError {
 /// Currently, this function cannot return any errors as the implementation
 /// is a placeholder.
 pub async fn run(addr: SocketAddr, state: AppState) -> Result<(), GrpcServerError> {
-    let platform = platform::Platform::new(state);
-    let svc_platform = authcore::auth_core_platform_server::AuthCorePlatformServer::new(platform);
+    let inner = platform::PlatformServer::new(state.clone());
+    let svc_platform = authcore::platform_server::PlatformServer::new(inner);
+
+    let inner = auth::basic::BasicServer::new(state.clone());
+    let svc_basic = auth::basic::basic_auth_server::BasicAuthServer::new(inner);
+
+    let inner = session::SessionServer::new(state.clone());
+    let svc_session = session::session_server::SessionServer::new(inner);
 
     tracing::info!("grpc listening on {}", addr);
     tonic::transport::Server::builder()
         .add_service(svc_platform)
+        .add_service(svc_basic)
+        .add_service(svc_session)
         .serve(addr)
         .await
         .map_err(GrpcServerError::GRPCServerError)?;
