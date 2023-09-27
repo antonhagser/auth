@@ -58,7 +58,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         *SERVICE_DATA,
         b"01234567890123456789012345678901",
         b"01234567890123456789012345678901",
-    );
+    )
+    .await;
 
     let app_state = Arc::new(app_state);
 

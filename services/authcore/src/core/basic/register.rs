@@ -3,7 +3,7 @@ use thiserror::Error;
 use tracing::info;
 
 use crate::{
-    models::{error::ModelError, user::User},
+    models::{error::ModelError, user::User, PrismaClient},
     state::AppState,
 };
 
@@ -41,6 +41,7 @@ pub struct BasicRegistrationData {
 /// * `data` - The registration data.
 pub async fn with_basic_auth(
     state: &AppState,
+    prisma_client: &PrismaClient,
     data: BasicRegistrationData,
 ) -> Result<User, BasicRegistrationError> {
     // validate email
@@ -49,7 +50,7 @@ pub async fn with_basic_auth(
     }
 
     // check if email already exists
-    match User::find_by_email(state.prisma(), &data.email, data.application_id, vec![]).await {
+    match User::find_by_email(prisma_client, &data.email, data.application_id, vec![]).await {
         Ok(_) => return Err(BasicRegistrationError::AlreadyExists),
         Err(ModelError::NotFound) => (),
         _ => return Err(BasicRegistrationError::InternalServerError),
@@ -59,7 +60,7 @@ pub async fn with_basic_auth(
     // TODO: Introduce caching? (big problem with cache invalidation, maybe we're fine with a bit of a delay?)
     let mut application =
         match crate::models::application::ReplicatedApplication::find_by_id_with_config(
-            state.prisma(),
+            prisma_client,
             data.application_id,
         )
         .await
@@ -70,7 +71,7 @@ pub async fn with_basic_auth(
 
     // If password requirements config is not found, use the default config
     let password_requirements = application
-        .basic_auth_config(state.prisma())
+        .basic_auth_config(prisma_client)
         .await
         .as_password_requirements_config();
 
@@ -84,7 +85,7 @@ pub async fn with_basic_auth(
     // create user builder
     let mut user = User::builder(
         state.id_generator(),
-        state.prisma(),
+        prisma_client,
         data.application_id,
         data.email,
     );
