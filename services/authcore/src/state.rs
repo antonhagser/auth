@@ -11,8 +11,9 @@ use crypto::{
     },
 };
 use rand::{rngs::StdRng, SeedableRng};
+use tokio::sync::Mutex;
 
-use crate::{models::PrismaClient, ServiceData};
+use crate::{grpc, models::PrismaClient, ServiceData};
 
 pub use config::{Config, CONFIG};
 
@@ -26,10 +27,12 @@ pub struct State {
     paseto_key: SymmetricKey,
     jwt_priv_key: Vec<u8>,
     jwt_pub_key: Vec<u8>,
+
+    email_grpc_client: Mutex<grpc::client::EmailClient>,
 }
 
 impl State {
-    pub fn new(
+    pub async fn new(
         prisma_client: PrismaClient,
         id_generator: SnowflakeGenerator,
         service_data: ServiceData,
@@ -66,6 +69,13 @@ impl State {
                 .as_bytes()
                 .to_vec();
 
+        // Connect to gRPC server
+        let email_grpc_client = Mutex::new(
+            grpc::client::connect_to_email_grpc_server()
+                .await
+                .expect("failed to connect to gRPC server"),
+        );
+
         Self {
             prisma_client,
             id_generator,
@@ -73,6 +83,7 @@ impl State {
             paseto_key: keys,
             jwt_priv_key: priv_jwt_key,
             jwt_pub_key: pub_key_pem,
+            email_grpc_client,
         }
     }
 
@@ -102,6 +113,10 @@ impl State {
 
     pub fn jwt_pub_key(&self) -> &[u8] {
         self.jwt_pub_key.as_ref()
+    }
+
+    pub fn email_grpc_client(&self) -> &Mutex<grpc::client::EmailClient> {
+        &self.email_grpc_client
     }
 }
 

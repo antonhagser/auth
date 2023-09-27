@@ -22,7 +22,6 @@ message EmailApplication {
 }
 
 message SendVerificationEmailRequest {
-    string fullName = 1;  // e.g., "Anton Hagsér"
     oneof verification {
         string verificationURL  = 2;
         string verificationCode = 3;

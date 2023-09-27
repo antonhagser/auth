@@ -10,6 +10,8 @@ mod error;
 mod platform;
 mod session;
 
+pub mod client;
+
 /// Tonic-generated gRPC bindings
 pub mod authcore {
     tonic::include_proto!("authcore");

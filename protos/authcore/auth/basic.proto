@@ -2,10 +2,17 @@ syntax = "proto3";
 
 package authcore.auth.basic;
 
+enum VerificationMethod {
+    EmailCode = 0;
+    EmailLink = 1;
+}
+
 message RegisterRequest {
-    string email          = 3;
+    string email          = 1;
     string password       = 2;
-    string application_id = 4;
+    string application_id = 3;
+
+    VerificationMethod verification_method = 4;
 }
 
 message RegisterResponse {
