@@ -27,9 +27,6 @@ pub mod totp;
 pub struct User {
     id: Snowflake,
 
-    first_name: Option<String>,
-    last_name: Option<String>,
-
     email_address: Option<EmailAddress>,
 
     password_enabled: bool,
@@ -146,8 +143,6 @@ impl User {
             id_generator,
             client,
 
-            first_name: None,
-            last_name: None,
             email_builder,
             basic_auth_builder: None,
 
@@ -160,14 +155,6 @@ impl User {
 
     pub fn id(&self) -> Snowflake {
         self.id
-    }
-
-    pub fn first_name(&self) -> Option<&String> {
-        self.first_name.as_ref()
-    }
-
-    pub fn last_name(&self) -> Option<&String> {
-        self.last_name.as_ref()
     }
 
     pub fn email_address(&self) -> Option<&EmailAddress> {
@@ -255,8 +242,6 @@ impl From<Data> for User {
         User {
             // Parse fields that must have a value
             id: value.id.try_into().unwrap(),
-            first_name: value.first_name,
-            last_name: value.last_name,
             password_enabled: value.password_enabled,
             last_login_ip: value.last_login_ip,
             created_at: value.created_at.into(),
@@ -305,8 +290,6 @@ pub struct UserBuilder<'a> {
     id_generator: &'a SnowflakeGenerator,
     client: &'a PrismaClient,
 
-    first_name: Option<String>,
-    last_name: Option<String>,
     email_builder: EmailAddressBuilder<'a>,
     basic_auth_builder: Option<BasicAuthBuilder>,
 
@@ -317,16 +300,6 @@ pub struct UserBuilder<'a> {
 }
 
 impl<'a> UserBuilder<'a> {
-    pub fn first_name(&mut self, first_name: String) -> &mut Self {
-        self.first_name = Some(first_name);
-        self
-    }
-
-    pub fn last_name(&mut self, last_name: String) -> &mut Self {
-        self.last_name = Some(last_name);
-        self
-    }
-
     pub fn user_metadata(&mut self, key: String, value: String) -> &mut Self {
         self.user_metadata.push(UserMetadata {
             id: self
@@ -354,14 +327,6 @@ impl<'a> UserBuilder<'a> {
         let application_id = self.application_id;
 
         let mut user_create_params: Vec<prisma::user::SetParam> = Vec::new();
-        if let Some(first_name) = &self.first_name {
-            user_create_params.push(prisma::user::first_name::set(Some(first_name.clone())));
-        }
-
-        if let Some(last_name) = &self.last_name {
-            user_create_params.push(prisma::user::last_name::set(Some(last_name.clone())));
-        }
-
         if self.basic_auth_builder.is_some() {
             user_create_params.push(prisma::user::password_enabled::set(true));
         }
@@ -422,8 +387,6 @@ impl<'a> UserBuilder<'a> {
         let user = User {
             id: user_id,
             application_id,
-            first_name: self.first_name,
-            last_name: self.last_name,
             email_address: Some(email_address),
             basic_auth,
             password_enabled: user.password_enabled,

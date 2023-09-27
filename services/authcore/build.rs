@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "session.proto",
                 "error.proto",
             ],
-            &["../../proto/authcore"],
+            &["../../protos/authcore"],
         )?;
 
     Ok(())

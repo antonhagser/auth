@@ -4,7 +4,6 @@ members = [
     "./services/auditlog",
     "./services/platform",
     "./services/webhook",
-    "./services/messaging",
     "./misc/prisma-cli",
     "./testing"
 ]

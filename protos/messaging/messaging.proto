@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package authcore;
+
+message GetVersionRequest {}
+
+message GetVersionResponse {
+    string version = 1;
+}
+
+service Service {
+    rpc GetVersion(GetVersionRequest) returns (GetVersionResponse) {}
+}

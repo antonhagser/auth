@@ -45,9 +45,6 @@ impl BasicAuth for BasicServer {
         let data = BasicRegistrationData {
             email: data.email,
 
-            first_name: None,
-            last_name: None,
-
             password: data.password,
             application_id,
         };
