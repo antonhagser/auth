@@ -6,3 +6,5 @@ testing-crate
 prisma.rs
 *.api.json
 *.txt
+dist
+node_modules

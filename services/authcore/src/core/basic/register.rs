@@ -28,9 +28,6 @@ pub enum BasicRegistrationError {
 pub struct BasicRegistrationData {
     pub email: String,
 
-    pub first_name: Option<String>,
-    pub last_name: Option<String>,
-
     pub password: String,
 
     pub application_id: Snowflake,
@@ -44,7 +41,7 @@ pub struct BasicRegistrationData {
 /// * `data` - The registration data.
 pub async fn with_basic_auth(
     state: &AppState,
-    mut data: BasicRegistrationData,
+    data: BasicRegistrationData,
 ) -> Result<User, BasicRegistrationError> {
     // validate email
     if !crypto::input::email::validate_email(&data.email) {
@@ -56,18 +53,6 @@ pub async fn with_basic_auth(
         Ok(_) => return Err(BasicRegistrationError::AlreadyExists),
         Err(ModelError::NotFound) => (),
         _ => return Err(BasicRegistrationError::InternalServerError),
-    }
-
-    // validate password
-    let mut user_inputs = Vec::new();
-    user_inputs.push(data.email.clone());
-
-    if let Some(first_name) = &data.first_name {
-        user_inputs.push(first_name.clone());
-    }
-
-    if let Some(last_name) = &data.last_name {
-        user_inputs.push(last_name.clone());
     }
 
     // Get the password requirements from the application
@@ -90,9 +75,8 @@ pub async fn with_basic_auth(
         .as_password_requirements_config();
 
     // Validate the password
-    let user_inputs: Vec<&str> = user_inputs.iter().map(|s| s.as_str()).collect();
     if let Err(e) =
-        password::validate_password(&data.password, &user_inputs, true, password_requirements)
+        password::validate_password(&data.password, &[&data.email], true, password_requirements)
     {
         return Err(BasicRegistrationError::PasswordFormat(e));
     }
@@ -104,16 +88,6 @@ pub async fn with_basic_auth(
         data.application_id,
         data.email,
     );
-
-    // if first name is provided, add it to builder
-    if let Some(first_name) = data.first_name.take() {
-        user.first_name(first_name);
-    }
-
-    // if last name is provided, add it to builder
-    if let Some(last_name) = data.last_name.take() {
-        user.last_name(last_name);
-    }
 
     // add password to builder
     let password_hash = crypto::password::hash_and_salt_password(&data.password);

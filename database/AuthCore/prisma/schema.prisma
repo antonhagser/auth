@@ -11,9 +11,6 @@ generator client {
 model User {
     id BigInt @id @unique
 
-    firstName String?
-    lastName  String?
-
     emailAddress EmailAddress?
 
     // Auth methods
@@ -39,7 +36,7 @@ model User {
     replicatedApplication   ReplicatedApplication @relation(fields: [replicatedApplicationID], references: [applicationID], onDelete: Cascade)
     replicatedApplicationID BigInt
 
-    @@index([firstName, lastName, replicatedApplicationID])
+    @@index([id, replicatedApplicationID])
 }
 
 model EmailAddress {
