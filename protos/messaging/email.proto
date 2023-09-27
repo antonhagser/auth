@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package messaging.email;
+
+message EmailData {
+    string from        = 1;
+    repeated string to = 2;
+
+    repeated string cc  = 7;
+    repeated string bcc = 8;
+    string reply_to     = 9;
+}
+
+message Attachment {
+    string filename = 1;
+    bytes data      = 2;
+    string mimetype = 3;  // e.g., "image/jpeg"
+}
+
+message EmailApplication {
+    string name = 1;
+}
+
+message SendVerificationEmailRequest {
+    string fullName = 1;  // e.g., "Anton Hagsér"
+    oneof verification {
+        string verificationURL  = 2;
+        string verificationCode = 3;
+    }
+
+    EmailData email_data               = 4;
+    EmailApplication email_application = 5;
+}
+
+message SendEmailResponse {
+    string message  = 1;  // e.g., "Email sent successfully"
+    string email_id = 2;  // ID or reference for the sent email
+}
+
+service EmailService {
+    rpc SendVerificationEmail(SendVerificationEmailRequest)
+        returns (SendEmailResponse);
+}
