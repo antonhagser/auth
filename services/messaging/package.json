@@ -7,14 +7,16 @@
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
         "build": "node bin/proto && rimraf dist && tsc -b",
+        "gen": "node bin/proto",
         "start": "node dist/index.js",
         "dev": "nodemon --exec ts-node src/index.ts"
     },
-    "author": "",
+    "author": "Anton Hagsér",
     "license": "",
     "devDependencies": {
         "@types/node": "^20.5.6",
         "@types/react": "^18.2.21",
+        "express": "^4.18.2",
         "grpc_tools_node_protoc_ts": "^5.3.3",
         "grpc-tools": "^1.12.4",
         "ts-proto": "^1.155.1",
@@ -23,6 +25,15 @@
     },
     "dependencies": {
         "@grpc/grpc-js": "^1.9.4",
-        "rimraf": "^5.0.5"
+        "@react-email/button": "*",
+        "@react-email/components": "*",
+        "@react-email/html": "*",
+        "@react-email/render": "*",
+        "@types/nodemailer": "^6.4.11",
+        "dotenv": "^16.3.1",
+        "nodemailer": "^6.9.5",
+        "react": "18.2.0",
+        "rimraf": "^5.0.5",
+        "source-map-support": "^0.5.21"
     }
 }

@@ -23,5 +23,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &["../../protos/authcore"],
         )?;
 
+    tonic_build::configure()
+        .build_client(true)
+        .build_server(false)
+        .compile(&["email.proto"], &["../../protos/messaging"])?;
+
     Ok(())
 }
