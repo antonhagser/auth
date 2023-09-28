@@ -156,12 +156,17 @@ model ReplicatedApplication {
 
     User User[]
 
-    basicAuthEnabled Boolean          @default(true)
-    basicAuthConfig  BasicAuthConfig? // Enforced to exist by Authcore
+    basicAuthEnabled   Boolean             @default(true)
+    basicAuthConfig    BasicAuthConfig? // Enforced to exist by Authcore
+    VerificationConfig VerificationConfig? // Enforced to exist by Authcore
 
     createdAt    DateTime       @default(now())
     updatedAt    DateTime       @updatedAt
     EmailAddress EmailAddress[]
+
+    domainName String
+
+    @@index([applicationID])
 }
 
 model BasicAuthConfig {
@@ -179,6 +184,24 @@ model BasicAuthConfig {
     minLowercase         Int     @default(0)
     minNumbers           Int     @default(0)
     minSymbols           Int     @default(0)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
+
+enum EmailVerificationType {
+    EMAIL_VERIFICATION_TYPE_NONE
+    EMAIL_VERIFICATION_TYPE_LINK
+    EMAIL_VERIFICATION_TYPE_CODE
+}
+
+model VerificationConfig {
+    applicationID BigInt                @id @unique
+    application   ReplicatedApplication @relation(fields: [applicationID], references: [applicationID], onDelete: Cascade)
+
+    emailRedirectURL        String?
+    expiresAfter            Int                   @default(86400) // 24 hours (in seconds)
+    emailVerificationType   EmailVerificationType @default(EMAIL_VERIFICATION_TYPE_LINK)
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt

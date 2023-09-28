@@ -3,7 +3,7 @@ use std::result::Result;
 use tracing::error;
 
 use crate::{
-    models::application::{BasicAuthConfig, ReplicatedApplication},
+    models::application::{BasicAuthConfig, ReplicatedApplication, VerificationConfig},
     state::AppState,
 };
 
@@ -39,12 +39,40 @@ impl super::authcore::platform_server::Platform for PlatformServer {
         &self,
         request: tonic::Request<AddApplicationRequest>,
     ) -> Result<tonic::Response<AddApplicationResponse>, tonic::Status> {
-        let (_, _, data) = request.into_parts();
+        let (_, _, request) = request.into_parts();
 
+        // Configure based on request
         let basic_auth_config_builder = BasicAuthConfig::builder();
+        let domain_name = request.domain_name;
+
+        let mut verification_config_builder = VerificationConfig::builder();
+        if let Some(config) = request.verification_config {
+            verification_config_builder.email_redirect_url(config.email_redirect_url);
+            verification_config_builder.expires_after(config.email_verification_ttl);
+
+            let email_verification_type =
+                super::authcore::EmailVerificationType::from_i32(config.email_verification_type)
+                    .unwrap(); // TODO: Fix unwrap
+
+            match email_verification_type {
+                super::authcore::EmailVerificationType::None => {
+                    crate::models::application::EmailVerificationType::EmailVerificationTypeNone
+                }
+                super::authcore::EmailVerificationType::Link => {
+                    crate::models::application::EmailVerificationType::EmailVerificationTypeLink
+                }
+                super::authcore::EmailVerificationType::Code => {
+                    crate::models::application::EmailVerificationType::EmailVerificationTypeCode
+                }
+            }
+        } else {
+            return Err(tonic::Status::invalid_argument(
+                "verification config is required",
+            ));
+        };
 
         // Verify data
-        let application_id = if let Ok(id) = data.application_id.try_into() {
+        let application_id = if let Ok(id) = request.application_id.try_into() {
             if ReplicatedApplication::get(self.state.prisma(), id)
                 .await
                 .is_ok()
@@ -60,7 +88,9 @@ impl super::authcore::platform_server::Platform for PlatformServer {
         if let Err(e) = ReplicatedApplication::new_and_insert(
             self.state.prisma(),
             application_id,
+            domain_name,
             basic_auth_config_builder,
+            verification_config_builder,
         )
         .await
         {

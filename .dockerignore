@@ -1,0 +1,10 @@
+**/target
+**/*.code-workspace
+api.json
+testing-crate
+.gitignore
+prisma.rs
+*.api.json
+*.txt
+dist
+node_modules

@@ -87,6 +87,10 @@ impl State {
         }
     }
 
+    pub fn verify_email_url() -> String {
+        format!("{}/verify/email", CONFIG.authcore_url())
+    }
+
     pub fn prisma(&self) -> &PrismaClient {
         &self.prisma_client
     }
