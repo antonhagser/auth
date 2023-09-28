@@ -3,7 +3,7 @@ use thiserror::Error;
 use tracing::info;
 
 use crate::{
-    models::{error::ModelError, user::User, PrismaClient},
+    models::{application::ReplicatedApplication, error::ModelError, user::User, PrismaClient},
     state::AppState,
 };
 
@@ -43,7 +43,7 @@ pub async fn with_basic_auth(
     state: &AppState,
     prisma_client: &PrismaClient,
     data: BasicRegistrationData,
-) -> Result<User, BasicRegistrationError> {
+) -> Result<(User, ReplicatedApplication), BasicRegistrationError> {
     // validate email
     if !crypto::input::email::validate_email(&data.email) {
         return Err(BasicRegistrationError::EmailFormat);
@@ -115,5 +115,5 @@ pub async fn with_basic_auth(
 
     info!("user created: {:#?}", user);
 
-    Ok(user)
+    Ok((user, application))
 }

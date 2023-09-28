@@ -102,7 +102,7 @@ impl BasicAuth for BasicServer {
             .map_err(|_| tonic::Status::internal("failed to create transaction"))?;
 
         // Try to register the user
-        let user = match register::with_basic_auth(
+        let (user, _) = match register::with_basic_auth(
             &self.state,
             &prisma_client,
             BasicRegistrationData {
@@ -175,7 +175,8 @@ impl BasicAuth for BasicServer {
                 name: "antonhagser.se".into(),
             }),
             verification: Some(Verification::VerificationUrl(format!(
-                "http://localhost:8080/verify/email/{}",
+                "{}/{}",
+                crate::state::State::verify_email_url(),
                 email_verification_token.token()
             ))),
         });

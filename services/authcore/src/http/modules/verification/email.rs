@@ -131,15 +131,46 @@ pub async fn route(
         );
     }
 
-    // Header for redirect
-    // TODO: Get redirect URL from token
-    headers.insert(
-        "Location",
-        "https://example.com/verification/email/success"
-            .parse()
-            .unwrap(),
-    );
+    // Get application
+    let mut application =
+        match crate::models::application::ReplicatedApplication::find_by_id_with_config(
+            state.prisma(),
+            application_id,
+        )
+        .await
+        {
+            Ok(application) => application,
+            Err(_) => {
+                return (
+                    hyper::StatusCode::UNAUTHORIZED,
+                    headers,
+                    Json(HTTPResponse::error(
+                        Error::InternalServerError.to_string(),
+                        Error::InternalServerError.get_message(),
+                        (),
+                    )),
+                )
+            }
+        };
 
+    let verification_config = application.verification_config(state.prisma()).await;
+    let url = match verification_config.email_redirect_url() {
+        Some(url) => url,
+        None => {
+            return (
+                hyper::StatusCode::UNAUTHORIZED,
+                headers,
+                Json(HTTPResponse::error(
+                    Error::InternalServerError.to_string(),
+                    Error::InternalServerError.get_message(),
+                    (),
+                )),
+            )
+        }
+    };
+
+    // Header for redirect
+    headers.insert("Location", format!("{url}?success=true").parse().unwrap());
     let response = HTTPResponse::ok(Response {});
     (hyper::StatusCode::FOUND, headers, Json(response))
 }
