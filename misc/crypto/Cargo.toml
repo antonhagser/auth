@@ -29,3 +29,4 @@ validator = { version = "0.16.0", features = ["derive"] }
 uuid = { version = "1.3.3", features = ["v4"] }
 base64 = "0.21.1"
 base32 = "0.4.0"
+tracing = { version = "0.1.27", features = ["log"] }

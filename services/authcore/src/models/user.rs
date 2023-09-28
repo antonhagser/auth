@@ -290,7 +290,7 @@ pub struct UserBuilder<'a> {
     id_generator: &'a SnowflakeGenerator,
     client: &'a PrismaClient,
 
-    email_builder: EmailAddressBuilder<'a>,
+    email_builder: EmailAddressBuilder,
     basic_auth_builder: Option<BasicAuthBuilder>,
 
     id: Snowflake,

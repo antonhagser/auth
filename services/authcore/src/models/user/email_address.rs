@@ -25,12 +25,8 @@ pub struct EmailAddress {
 }
 
 impl EmailAddress {
-    pub fn builder(
-        id_generator: &SnowflakeGenerator,
-        user_id: Snowflake,
-    ) -> EmailAddressBuilder<'_> {
+    pub fn builder(id_generator: &SnowflakeGenerator, user_id: Snowflake) -> EmailAddressBuilder {
         EmailAddressBuilder {
-            id_generator,
             email_address: EmailAddress {
                 id: id_generator.next_snowflake().unwrap(),
                 user_id,
@@ -39,7 +35,7 @@ impl EmailAddress {
         }
     }
 
-    pub async fn find<C>(
+    pub async fn find_by_address<C>(
         client: &PrismaClient,
         email: C,
         application_id: Snowflake,
@@ -62,6 +58,58 @@ impl EmailAddress {
             Some(email_address) => Ok(email_address.into()),
             None => Err(ModelError::NotFound),
         }
+    }
+
+    pub async fn get(
+        client: &PrismaClient,
+        user_id: Snowflake,
+        email_id: Snowflake,
+        application_id: Snowflake,
+    ) -> Result<EmailAddress, ModelError> {
+        let email_address = client
+            .email_address()
+            .find_first(vec![
+                prisma::email_address::id::equals(email_id.to_id_signed()),
+                prisma::email_address::user_id::equals(user_id.to_id_signed()),
+                prisma::email_address::replicated_application_id::equals(
+                    application_id.to_id_signed(),
+                ),
+            ])
+            .exec()
+            .await?;
+
+        match email_address {
+            Some(email_address) => Ok(email_address.into()),
+            None => Err(ModelError::NotFound),
+        }
+    }
+
+    pub async fn set_verified(
+        &self,
+        client: &PrismaClient,
+        application_id: Snowflake,
+    ) -> Result<(), ModelError> {
+        client
+            .email_address()
+            .update_many(
+                vec![
+                    prisma::email_address::id::equals(self.id().to_id_signed()),
+                    prisma::email_address::user_id::equals(self.user_id().to_id_signed()),
+                    prisma::email_address::replicated_application_id::equals(
+                        // TODO: Make application id a part of the email address
+                        application_id.to_id_signed(),
+                    ),
+                ],
+                vec![
+                    prisma::email_address::verified_at::set(Some(Utc::now().into())),
+                    prisma::email_address::verified::set(true),
+                    // TODO: Implement verified IP
+                ],
+            )
+            .exec()
+            .await?;
+
+        Ok(())
     }
 
     pub fn id(&self) -> Snowflake {
@@ -112,12 +160,11 @@ impl From<Data> for EmailAddress {
     }
 }
 
-pub struct EmailAddressBuilder<'a> {
-    id_generator: &'a SnowflakeGenerator,
+pub struct EmailAddressBuilder {
     email_address: EmailAddress,
 }
 
-impl<'a> EmailAddressBuilder<'a> {
+impl EmailAddressBuilder {
     pub async fn build(
         self,
         client: &PrismaClient,
@@ -130,7 +177,7 @@ impl<'a> EmailAddressBuilder<'a> {
         client
             .email_address()
             .create(
-                self.id_generator.next_snowflake().unwrap().to_id_signed(),
+                email_address.id().to_id_signed(),
                 prisma::user::id::equals(user_id.to_id_signed()),
                 super::prisma::replicated_application::application_id::equals(
                     application_id.to_id_signed(),

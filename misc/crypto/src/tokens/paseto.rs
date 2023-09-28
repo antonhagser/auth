@@ -101,6 +101,10 @@ impl<C> OwnedClaims<C> {
     pub fn other(&self) -> Option<&C> {
         self.other.as_ref()
     }
+
+    pub fn other_mut(&mut self) -> &mut Option<C> {
+        &mut self.other
+    }
 }
 
 /// Allows conversion from `DefaultClaims` to `OwnedClaims`.
@@ -307,10 +311,13 @@ pub fn encrypt_token(
 /// # Returns
 ///
 /// * A Result containing an OwnedClaims<()> instance with the extracted claims, or an Error.
-pub fn validate_token(
+pub fn validate_token<T>(
     token: &str,
     key: &PasetoSymmetricKey<V4, Local>,
-) -> Result<OwnedClaims<()>, Error> {
+) -> Result<OwnedClaims<T>, Error>
+where
+    T: DeserializeOwned,
+{
     // Todo: extend function to allow checking of claims, validating audience, etc.
 
     let mut parser = PasetoParser::<V4, Local>::default();
@@ -321,9 +328,21 @@ pub fn validate_token(
 
     // Parse the claims
     let res = res.to_string();
-    let claims: DefaultClaims = serde_json::from_str(&res)?;
+    let mut claims: DefaultClaims = serde_json::from_str(&res)?;
 
-    Ok(claims.into())
+    // Parse other claims
+    let other = claims.other.take();
+    if let Some(other) = other {
+        let other: T = serde_json::from_value(other)?;
+        let mut claims: OwnedClaims<T> = claims.into();
+        claims.other = Some(other);
+
+        Ok(claims)
+    } else {
+        claims.other = None;
+
+        Ok(claims.into())
+    }
 }
 
 /// Validates a Paseto token and extracts the claims with a custom data type.

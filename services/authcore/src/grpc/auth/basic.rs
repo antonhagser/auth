@@ -4,7 +4,7 @@ use tonic::Code;
 use crate::{
     core::{
         basic::register::{self, BasicRegistrationData, BasicRegistrationError},
-        token::generate_generic_token,
+        verification::email::EmailVerificationToken,
     },
     grpc::{
         client::email::{
@@ -134,19 +134,25 @@ impl BasicAuth for BasicServer {
         // TODO: Build according to clean code principle
         // TODO: Move logic into sub function to handle errors properly
 
+        let token_id = id_generator.next_snowflake().unwrap();
         let token = match method {
-            VerificationMethod::EmailLink => generate_generic_token(
-                &self.state,
-                id_generator.next_snowflake().unwrap(),
-                user.id(),
-                expires_at,
-            )
-            .map_err(|_| tonic::Status::internal("failed to generate token"))?,
+            VerificationMethod::EmailLink => {
+                EmailVerificationToken::new(
+                    &self.state,
+                    token_id,
+                    user.id(),
+                    user.email_address().unwrap().id(),
+                    application_id,
+                    expires_at,
+                )
+                .map_err(|_| tonic::Status::internal("failed to create email verification token"))?
+                .token
+            }
             VerificationMethod::EmailCode => unimplemented!(),
         };
 
-        let user_token = UserToken::builder(
-            id_generator.next_snowflake().unwrap(),
+        let email_verification_token = UserToken::builder(
+            token_id,
             user.id(),
             UserTokenType::EmailVerification,
             token,
@@ -169,8 +175,8 @@ impl BasicAuth for BasicServer {
                 name: "antonhagser.se".into(),
             }),
             verification: Some(Verification::VerificationUrl(format!(
-                "http://localhost:/verify-email?token={}",
-                user_token.token()
+                "http://localhost:8080/verify/email/{}",
+                email_verification_token.token()
             ))),
         });
 

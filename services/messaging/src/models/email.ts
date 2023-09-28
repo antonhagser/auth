@@ -30,8 +30,6 @@ export interface EmailApplication {
 }
 
 export interface SendVerificationEmailRequest {
-  /** e.g., "Anton Hagsér" */
-  fullName: string;
   verificationURL?: string | undefined;
   verificationCode?: string | undefined;
   emailData?: EmailData | undefined;
@@ -311,20 +309,11 @@ export const EmailApplication = {
 };
 
 function createBaseSendVerificationEmailRequest(): SendVerificationEmailRequest {
-  return {
-    fullName: "",
-    verificationURL: undefined,
-    verificationCode: undefined,
-    emailData: undefined,
-    emailApplication: undefined,
-  };
+  return { verificationURL: undefined, verificationCode: undefined, emailData: undefined, emailApplication: undefined };
 }
 
 export const SendVerificationEmailRequest = {
   encode(message: SendVerificationEmailRequest, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
-    if (message.fullName !== "") {
-      writer.uint32(10).string(message.fullName);
-    }
     if (message.verificationURL !== undefined) {
       writer.uint32(18).string(message.verificationURL);
     }
@@ -347,13 +336,6 @@ export const SendVerificationEmailRequest = {
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
-        case 1:
-          if (tag !== 10) {
-            break;
-          }
-
-          message.fullName = reader.string();
-          continue;
         case 2:
           if (tag !== 18) {
             break;
@@ -393,7 +375,6 @@ export const SendVerificationEmailRequest = {
 
   fromJSON(object: any): SendVerificationEmailRequest {
     return {
-      fullName: isSet(object.fullName) ? String(object.fullName) : "",
       verificationURL: isSet(object.verificationURL) ? String(object.verificationURL) : undefined,
       verificationCode: isSet(object.verificationCode) ? String(object.verificationCode) : undefined,
       emailData: isSet(object.emailData) ? EmailData.fromJSON(object.emailData) : undefined,
@@ -403,9 +384,6 @@ export const SendVerificationEmailRequest = {
 
   toJSON(message: SendVerificationEmailRequest): unknown {
     const obj: any = {};
-    if (message.fullName !== "") {
-      obj.fullName = message.fullName;
-    }
     if (message.verificationURL !== undefined) {
       obj.verificationURL = message.verificationURL;
     }
@@ -426,7 +404,6 @@ export const SendVerificationEmailRequest = {
   },
   fromPartial<I extends Exact<DeepPartial<SendVerificationEmailRequest>, I>>(object: I): SendVerificationEmailRequest {
     const message = createBaseSendVerificationEmailRequest();
-    message.fullName = object.fullName ?? "";
     message.verificationURL = object.verificationURL ?? undefined;
     message.verificationCode = object.verificationCode ?? undefined;
     message.emailData = (object.emailData !== undefined && object.emailData !== null)

@@ -86,7 +86,7 @@ pub async fn verify_refresh_token(
     token: &str,
 ) -> Result<UserToken, RefreshTokenError> {
     // Parse the token
-    let claims = paseto::validate_token(token, state.paseto_key())?;
+    let claims = paseto::validate_token::<()>(token, state.paseto_key())?;
 
     // Validate it against the database
     let token = UserToken::get(
