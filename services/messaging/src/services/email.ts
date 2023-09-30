@@ -14,9 +14,18 @@ import {
 import renderVerificationEmail from "../templates/verify";
 import sendEmail from "../email/send";
 
+/**
+ * The Email service (gRPC) handles all email related tasks.
+ */
 class Email implements EmailServiceServer {
     [method: string]: UntypedHandleCall;
 
+    /**
+     * Sends a verification email to the specified email address.
+     *
+     * @param call The gRPC call object
+     * @param callback The callback function
+     */
     public sendVerificationEmail(
         call: ServerUnaryCall<SendVerificationEmailRequest, SendEmailResponse>,
         callback: sendUnaryData<SendEmailResponse>
@@ -24,10 +33,12 @@ class Email implements EmailServiceServer {
         (async () => {
             console.log("Received sendVerificationEmail request");
 
+            // Get request data
             const request = call.request;
             const emailData = request.emailData;
             const emailApplication = request.emailApplication;
 
+            // Validate request data
             if (!emailData) {
                 return callback(new Error("Email data is undefined"));
             }
@@ -38,20 +49,13 @@ class Email implements EmailServiceServer {
 
             console.log("Email data: %s", JSON.stringify(emailData));
 
-            console.log(
-                "Request verification URL: %s",
-                request.verificationURL
-            );
-            console.log(
-                "Request verification code: %s",
-                request.verificationCode
-            );
-
+            // Render email template to HTML
             const emailHtml = renderVerificationEmail({
                 url: request.verificationURL,
                 code: request.verificationCode,
             });
 
+            // Send email
             const subject = "Confirm your email address";
             const emailOptions = {
                 from: emailData.from,
@@ -64,13 +68,13 @@ class Email implements EmailServiceServer {
             };
 
             let result = await sendEmail(emailOptions);
-
             if (!result) {
                 return callback(new Error("Email failed to send"));
             }
 
             console.log("Sending email to: %s", emailData.to);
 
+            // Return response
             return callback(null, {
                 emailId: "", // TODO: Implement Email IDs and logging
                 message: "Email sent successfully",

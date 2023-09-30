@@ -21,22 +21,16 @@ interface EmailProps {
     code?: string;
 }
 
+/// Email template component, uses react-email to render a HTML email
 export const VerifyEmail = ({ url, code }: EmailProps) => (
     <Html>
         <Head />
         <Preview>Confirm your email address</Preview>
         <Body style={main}>
             <Container style={container}>
-                <Section style={logoContainer}>
-                    {/* <Img
-                        src={}
-                        width="120"
-                        height="36"
-                        alt="Slack"
-                    /> */}
-                </Section>
                 <Heading style={h1}>Confirm your email address</Heading>
 
+                {/* Conditionally render the code or the URL */}
                 {code ? (
                     <>
                         <Text style={heroText}>
@@ -70,6 +64,7 @@ export const VerifyEmail = ({ url, code }: EmailProps) => (
     </Html>
 );
 
+// Styles
 const main = {
     backgroundColor: "#ffffff",
     margin: "0 auto",
@@ -131,6 +126,16 @@ const text = {
     lineHeight: "24px",
 };
 
-export default function renderVerificationEmail(props: EmailProps): string {
-    return render(<VerifyEmail url={props.url} code={props.code} />);
+/**
+ * Renders the email template
+ *
+ * @param {string} props.url - The URL to the verification page
+ * @param {string} props.code - The verification code (if no URL is provided)
+ * @returns string
+ */
+export default function renderVerificationEmail({
+    url,
+    code,
+}: EmailProps): string {
+    return render(<VerifyEmail url={url} code={code} />);
 }
