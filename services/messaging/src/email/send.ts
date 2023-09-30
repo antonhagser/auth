@@ -1,5 +1,6 @@
 import { SendMailOptions, createTransport } from "nodemailer";
 
+// Load environment variables
 const transporter = createTransport({
     service: process.env.NODEMAILER_SERVICE,
     host: process.env.NODEMAILER_HOST,
@@ -11,6 +12,9 @@ const transporter = createTransport({
     },
 });
 
+/**
+ * The email data object.
+ */
 export interface Data {
     from: string;
     to: string | string[];
@@ -21,6 +25,11 @@ export interface Data {
     html: string;
 }
 
+/**
+ * Sends an email using the nodemailer library.
+ *
+ * @param option The email options
+ */
 export default async function sendEmail(
     option: SendMailOptions
 ): Promise<boolean> {
@@ -30,11 +39,13 @@ export default async function sendEmail(
     console.debug("Host: %s", process.env.NODEMAILER_HOST);
     console.debug("Email: %s", process.env.NODEMAILER_EMAIL);
 
+    // Send email
     try {
         let result = await transporter.sendMail(option);
 
         console.log("Mail sent: ", result.accepted.length > 0 ? true : false);
 
+        // Check if email was sent
         if (result.accepted.length > 0) {
             return true;
         }

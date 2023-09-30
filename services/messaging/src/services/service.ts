@@ -10,9 +10,18 @@ import {
     ServiceService,
 } from "../models/messaging";
 
+/**
+ * The Service service (gRPC) handles all service related tasks such as versioning.
+ */
 class Service implements ServiceServer {
     [method: string]: UntypedHandleCall;
 
+    /**
+     * Returns the current version of the service.
+     *
+     * @param call The gRPC call object
+     * @param callback The callback function
+     */
     public getVersion(
         call: ServerUnaryCall<GetVersionRequest, GetVersionResponse>,
         callback: sendUnaryData<GetVersionResponse>
