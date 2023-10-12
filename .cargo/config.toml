@@ -1,5 +1,2 @@
 [build]
 rustflags = ["--cfg", "tokio_unstable"]
-
-[alias]
-prisma = "run --release -p prisma-cli --"

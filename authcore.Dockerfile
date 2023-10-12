@@ -24,7 +24,6 @@ COPY --from=planner /app/recipe.json recipe.json
 
 RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
-RUN cargo prisma generate --schema=./database/AuthCore/prisma/schema.prisma
 RUN cargo build --release --bin authcore
 
 FROM alpine:latest as certs
