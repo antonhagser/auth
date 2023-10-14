@@ -19,7 +19,7 @@ tokio = { version = "1.25.0", features = ["full"] }
 tonic = "0.10.2"
 tracing = "0.1.37"
 tracing-subscriber = "0.3.16"
-uuid = { version = "1.3.0", features = ["v4"] }
+uuid = { version = "1.3.0", features = ["v4", "serde"] }
 crypto = { workspace = true }
 hyper = "0.14.24"
 futures = "0.3.28"

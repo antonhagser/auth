@@ -37,8 +37,8 @@ pub async fn bind(
     let http_handle = start_http(state.clone(), http_addr).await;
     let grpc_handle = start_grpc(state.clone(), grpc_addr).await;
 
+    // Wait for either the HTTP or gRPC server to exit
     let result = select(grpc_handle, http_handle).await;
-
     match result {
         Either::Left((grpc_result, http_handle)) => {
             http_handle.abort();

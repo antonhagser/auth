@@ -6,8 +6,10 @@ use crate::state::State;
 
 use super::BindError;
 
-mod auth;
-mod two_factor;
+mod basic;
+mod mfa;
+mod service;
+mod token;
 
 /// The root endpoint for the HTTP server. Used for health checks.
 async fn root() -> impl IntoResponse {
@@ -31,8 +33,12 @@ pub async fn run(addr: SocketAddr, state: State) -> Result<(), BindError> {
     let app: Router = Router::new()
         .with_state(state.clone())
         .route("/", get(root))
-        .nest("/auth", auth::router(state.clone()))
-        .nest("/2fa", two_factor::router(state.clone()));
+        .route("/health", get(service::health))
+        .route("/ready", get(service::ready))
+        .route("/version", get(service::version))
+        .nest("/basic", basic::router(state.clone()))
+        .nest("/token", token::router(state.clone()))
+        .nest("/mfa", mfa::router(state.clone()));
 
     tracing::info!("http listening on {}", addr);
 

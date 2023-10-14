@@ -1,16 +1,16 @@
 use axum::routing::post;
+use tracing::trace;
 
 use crate::state::State;
 
 pub use login::login;
-pub use register::register;
 
 pub mod login;
-pub mod register;
 
 pub fn router(state: State) -> axum::Router {
+    trace!("registering basic auth routes");
+
     axum::Router::new()
         .with_state(state)
-        .route("/", post(register))
         .route("/login", post(login))
 }

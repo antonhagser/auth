@@ -5,13 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use api::{
-    grpc::{self, GrpcServerError},
-    http::{self, HTTPServerError},
-};
-use futures::future::select;
 use once_cell::sync::Lazy;
-use tokio::task::JoinHandle;
 use tracing::info;
 
 use state::AppState;
