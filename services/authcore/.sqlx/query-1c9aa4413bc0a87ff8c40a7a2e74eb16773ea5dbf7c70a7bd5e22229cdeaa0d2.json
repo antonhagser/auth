@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT * FROM applications\n            WHERE application_id = $1\n            ",
+  "query": "\n            INSERT INTO applications (application_id, basic_auth_settings_id)\n            VALUES ($1, $2) RETURNING *\n            ",
   "describe": {
     "columns": [
       {
@@ -26,6 +26,7 @@
     ],
     "parameters": {
       "Left": [
+        "Uuid",
         "Uuid"
       ]
     },
@@ -36,5 +37,5 @@
       false
     ]
   },
-  "hash": "2b936bd13b6f471c433c22661167fcd0c40f15d631d32f2b20079dfe7fb41689"
+  "hash": "1c9aa4413bc0a87ff8c40a7a2e74eb16773ea5dbf7c70a7bd5e22229cdeaa0d2"
 }
