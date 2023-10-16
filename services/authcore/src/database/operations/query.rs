@@ -1,2 +1,2 @@
-pub mod applications;
-pub mod users;
+pub mod application;
+pub mod user;

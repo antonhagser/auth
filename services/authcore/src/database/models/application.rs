@@ -3,9 +3,9 @@ use uuid::Uuid;
 
 mod basic_auth_settings;
 
-pub use basic_auth_settings::BasicAuthSettings;
+pub use basic_auth_settings::*;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Application {
     pub(crate) application_id: Uuid,
     pub(crate) basic_auth_settings_id: Uuid,

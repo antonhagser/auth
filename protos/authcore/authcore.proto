@@ -2,30 +2,8 @@ syntax = "proto3";
 
 package authcore;
 
-message GetVersionRequest {}
-
-message GetVersionResponse {
-    string version = 1;
-}
-
-enum EmailVerificationType {
-    EMAIL_VERIFICATION_TYPE_NONE = 0;
-    EMAIL_VERIFICATION_TYPE_LINK = 1;
-    EMAIL_VERIFICATION_TYPE_CODE = 2;
-}
-
-message VerificationConfig {
-    string email_redirect_url                     = 1;
-    uint32 email_verification_ttl                 = 2;
-    EmailVerificationType email_verification_type = 3;
-}
-
 message AddApplicationRequest {
     string application_id = 1;
-
-    string domain_name = 2;
-
-    VerificationConfig verification_config = 3;
 }
 
 message AddApplicationResponse {}
@@ -37,11 +15,8 @@ message DeleteApplicationRequest {
 message DeleteApplicationResponse {}
 
 service Platform {
-    rpc GetVersion(GetVersionRequest) returns (GetVersionResponse) {}
-
-    rpc AddApplication(AddApplicationRequest) returns (AddApplicationResponse) {
-    }
+    rpc AddApplication(AddApplicationRequest) returns (AddApplicationResponse);
 
     rpc DeleteApplication(DeleteApplicationRequest)
-        returns (DeleteApplicationResponse) {}
+        returns (DeleteApplicationResponse);
 }

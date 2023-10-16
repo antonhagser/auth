@@ -1,8 +1,0 @@
-syntax = "proto3";
-
-package authcore.error;
-
-message DetailedError {
-    string code    = 1;
-    string message = 2;
-}

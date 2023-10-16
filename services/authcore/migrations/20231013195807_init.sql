@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS basic_auth_settings (
     require_uppercase BOOLEAN NOT NULL DEFAULT FALSE,
     require_numeric BOOLEAN NOT NULL DEFAULT FALSE,
     require_special BOOLEAN NOT NULL DEFAULT FALSE,
-    password_histroy_count INTEGER NOT NULL DEFAULT 0,
+    password_history_count INTEGER NOT NULL DEFAULT 0,
     password_expiry_days INTEGER NOT NULL DEFAULT 0,
     max_failed_attempts INTEGER NOT NULL DEFAULT 0,
     lockout_duration INTEGER NOT NULL DEFAULT 0,

@@ -8,3 +8,4 @@ prisma.rs
 *.txt
 dist
 node_modules
+.vscode

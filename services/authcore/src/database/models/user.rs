@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-mod basic_auths;
-mod email_addresses;
+mod basic_auth;
+mod email_address;
 
-pub use basic_auths::BasicAuth;
-pub use email_addresses::EmailAddress;
+pub use basic_auth::*;
+pub use email_address::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {

@@ -1,5 +1,5 @@
-mod applications;
-mod users;
+mod application;
+mod user;
 
-pub use applications::*;
-pub use users::*;
+pub use application::*;
+pub use user::*;

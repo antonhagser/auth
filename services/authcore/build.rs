@@ -15,15 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "ErrorCode",
             "#[derive(strum::Display, serde::Deserialize, serde::Serialize)]",
         )
-        .compile(
-            &[
-                "authcore.proto",
-                "auth/basic.proto",
-                "session.proto",
-                "error.proto",
-            ],
-            &["../../protos/authcore"],
-        )?;
+        .compile(&["authcore.proto"], &["../../protos/authcore"])?;
 
     tonic_build::configure()
         .build_client(true)
